@@ -1,0 +1,477 @@
+package com.dealnear.offer.offer;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import com.dealnear.offer.ownership.StoreOwnershipVerifier;
+import com.dealnear.offer.ownership.StoreSummary;
+import com.dealnear.offer.ownership.StoreSummaryClient;
+import com.dealnear.offer.outbox.OfferOutboxRepository;
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
+import java.util.UUID;
+import java.util.List;
+import java.time.Instant;
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.http.MediaType;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.jdbc.core.JdbcTemplate;
+
+@SpringBootTest
+@AutoConfigureMockMvc
+@ActiveProfiles("test")
+class OfferControllerTest {
+    @Autowired
+    private MockMvc mockMvc;
+    @Autowired
+    private OfferRepository offerRepository;
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+    @Autowired
+    private OfferOutboxRepository offerOutboxRepository;
+    @MockBean
+    private StoreOwnershipVerifier storeOwnershipVerifier;
+    @MockBean
+    private StoreSummaryClient storeSummaryClient;
+
+    @BeforeEach
+    void clearOffers() {
+        offerRepository.deleteAll();
+        offerOutboxRepository.deleteAll();
+        when(storeSummaryClient.findById(any(UUID.class)))
+                .thenReturn(java.util.Optional.of(new StoreSummary(
+                        UUID.fromString("11111111-1111-1111-1111-111111111111"),
+                        "Corner Market",
+                        "New York"
+                )));
+        when(storeSummaryClient.findByIds(any(List.class)))
+                .thenAnswer(invocation -> ((List<UUID>) invocation.getArgument(0)).stream()
+                        .collect(java.util.stream.Collectors.toMap(
+                                id -> id,
+                                id -> new StoreSummary(id, "Corner Market", "New York")
+                        )));
+    }
+
+    @Test
+    void createsDraftAfterOwnershipVerification() throws Exception {
+        when(storeOwnershipVerifier.vendorOwnsStore(any(UUID.class), anyString())).thenReturn(true);
+        mockMvc.perform(post("/api/offers")
+                        .header("Authorization", "Bearer " + vendorToken())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"storeId":"11111111-1111-1111-1111-111111111111","title":"20% off","description":"Weekend offer","startAt":"2026-10-13T00:00:00Z","endAt":"2026-12-31T23:59:59Z"}
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.vendorId").value("vendor-1"))
+                .andExpect(jsonPath("$.status").value("DRAFT"))
+                .andExpect(jsonPath("$.title").value("20% off"));
+    }
+
+    @Test
+    void rejectsStoreVendorDoesNotOwn() throws Exception {
+        when(storeOwnershipVerifier.vendorOwnsStore(any(UUID.class), anyString())).thenReturn(false);
+        mockMvc.perform(post("/api/offers")
+                        .header("Authorization", "Bearer " + vendorToken())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"storeId":"11111111-1111-1111-1111-111111111111","title":"20% off","description":"Weekend offer","startAt":"2026-10-13T00:00:00Z","endAt":"2026-12-31T23:59:59Z"}
+                                """))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error.code").value("STORE_NOT_FOUND"));
+    }
+
+    @Test
+    void rejectsInvalidOfferInput() throws Exception {
+        mockMvc.perform(post("/api/offers")
+                        .header("Authorization", "Bearer " + vendorToken())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"storeId":"11111111-1111-1111-1111-111111111111","title":"","description":"","startAt":"2026-10-13T00:00:00Z","endAt":"2026-12-31T23:59:59Z"}
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("VALIDATION_ERROR"));
+    }
+
+    @Test
+    void rejectsReversedOfferValidityWindow() throws Exception {
+        when(storeOwnershipVerifier.vendorOwnsStore(any(UUID.class), anyString())).thenReturn(true);
+        mockMvc.perform(post("/api/offers")
+                        .header("Authorization", "Bearer " + vendorToken())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"storeId":"11111111-1111-1111-1111-111111111111","title":"20% off","description":"Weekend offer","startAt":"2026-12-31T23:59:59Z","endAt":"2026-10-13T00:00:00Z"}
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("INVALID_OFFER_VALIDITY"));
+    }
+
+    @Test
+    void retrievesOwnedOffer() throws Exception {
+        Offer offer = offerRepository.save(new Offer(
+                "vendor-1", UUID.fromString("11111111-1111-1111-1111-111111111111"),
+                "20% off", "Weekend offer"
+        ));
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(
+                        "/api/offers/" + offer.getId())
+                        .header("Authorization", "Bearer " + vendorToken("vendor-1")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(offer.getId().toString()))
+                .andExpect(jsonPath("$.vendorId").value("vendor-1"))
+                .andExpect(jsonPath("$.status").value("DRAFT"));
+    }
+
+    @Test
+    void doesNotRevealOfferOwnedByAnotherVendor() throws Exception {
+        Offer offer = offerRepository.save(new Offer(
+                "vendor-1", UUID.fromString("11111111-1111-1111-1111-111111111111"),
+                "20% off", "Weekend offer"
+        ));
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(
+                        "/api/offers/" + offer.getId())
+                        .header("Authorization", "Bearer " + vendorToken("vendor-2")))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error.code").value("OFFER_NOT_FOUND"));
+    }
+
+    @Test
+    void listsOnlyOwnedOffersWithPaginationMetadata() throws Exception {
+        offerRepository.save(new Offer(
+                "vendor-1", UUID.randomUUID(), "Offer one", "Description one"));
+        offerRepository.save(new Offer(
+                "vendor-1", UUID.randomUUID(), "Offer two", "Description two"));
+        offerRepository.save(new Offer(
+                "vendor-1", UUID.randomUUID(), "Offer three", "Description three"));
+        offerRepository.save(new Offer(
+                "vendor-2", UUID.randomUUID(), "Other vendor offer", "Description"));
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(
+                        "/api/offers?page=0&size=2")
+                        .header("Authorization", "Bearer " + vendorToken("vendor-1")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.offers.length()").value(2))
+                .andExpect(jsonPath("$.page").value(0))
+                .andExpect(jsonPath("$.size").value(2))
+                .andExpect(jsonPath("$.totalElements").value(3))
+                .andExpect(jsonPath("$.totalPages").value(2));
+    }
+
+    @Test
+    void rejectsInvalidPagination() throws Exception {
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(
+                        "/api/offers?page=-1&size=20")
+                        .header("Authorization", "Bearer " + vendorToken("vendor-1")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("INVALID_PAGINATION"));
+    }
+
+    @Test
+    void rejectsMalformedOfferId() throws Exception {
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(
+                        "/api/offers/not-a-uuid")
+                        .header("Authorization", "Bearer " + vendorToken("vendor-1")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("INVALID_REQUEST"));
+    }
+
+    @Test
+    void updatesOwnedDraftOffer() throws Exception {
+        Offer offer = offerRepository.save(new Offer(
+                "vendor-1", UUID.fromString("11111111-1111-1111-1111-111111111111"),
+                "Original title", "Original description"
+        ));
+
+        mockMvc.perform(patch("/api/offers/" + offer.getId())
+                        .header("Authorization", "Bearer " + vendorToken("vendor-1"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"title":"Updated title","description":"Updated description"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(offer.getId().toString()))
+                .andExpect(jsonPath("$.storeId").value("11111111-1111-1111-1111-111111111111"))
+                .andExpect(jsonPath("$.title").value("Updated title"))
+                .andExpect(jsonPath("$.description").value("Updated description"))
+                .andExpect(jsonPath("$.status").value("DRAFT"));
+    }
+
+    @Test
+    void doesNotAllowAnotherVendorToUpdateOffer() throws Exception {
+        Offer offer = offerRepository.save(new Offer(
+                "vendor-1", UUID.randomUUID(), "Original title", "Original description"
+        ));
+
+        mockMvc.perform(patch("/api/offers/" + offer.getId())
+                        .header("Authorization", "Bearer " + vendorToken("vendor-2"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"title":"Updated title","description":"Updated description"}
+                                """))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error.code").value("OFFER_NOT_FOUND"));
+    }
+
+    @Test
+    void rejectsInvalidDraftUpdate() throws Exception {
+        Offer offer = offerRepository.save(new Offer(
+                "vendor-1", UUID.randomUUID(), "Original title", "Original description"
+        ));
+
+        mockMvc.perform(patch("/api/offers/" + offer.getId())
+                        .header("Authorization", "Bearer " + vendorToken("vendor-1"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"title":"","description":""}
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("VALIDATION_ERROR"));
+    }
+
+    @Test
+    void recordsProjectionUpdateWhenPublishedOfferChanges() throws Exception {
+        Offer offer = new Offer(
+                "vendor-1", UUID.randomUUID(), "Original title", "Original description"
+        );
+        offer.publish();
+        offerRepository.save(offer);
+
+        mockMvc.perform(patch("/api/offers/" + offer.getId())
+                        .header("Authorization", "Bearer " + vendorToken("vendor-1"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"title":"Updated title","description":"Updated description"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("PUBLISHED"))
+                .andExpect(jsonPath("$.title").value("Updated title"));
+
+        org.assertj.core.api.Assertions.assertThat(offerOutboxRepository.findAll())
+                .hasSize(1)
+                .first()
+                .extracting(event -> event.getEventType())
+                .isEqualTo("offer.projection.updated.v1");
+    }
+
+    @Test
+    void publishesOwnedDraftOffer() throws Exception {
+        Offer offer = offerRepository.save(new Offer(
+                "vendor-1", UUID.randomUUID(), "Draft title", "Draft description"
+        ));
+
+        mockMvc.perform(post("/api/offers/" + offer.getId() + "/publish")
+                        .header("Authorization", "Bearer " + vendorToken("vendor-1")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(offer.getId().toString()))
+                .andExpect(jsonPath("$.status").value("PUBLISHED"));
+        org.assertj.core.api.Assertions.assertThat(offerOutboxRepository.findAll())
+                .hasSize(1)
+                .first()
+                .extracting(event -> event.getEventType())
+                .isEqualTo("offer.projection.updated.v1");
+    }
+
+    @Test
+    void publishingAlreadyPublishedOfferIsIdempotent() throws Exception {
+        Offer offer = offerRepository.save(new Offer(
+                "vendor-1", UUID.randomUUID(), "Draft title", "Draft description"
+        ));
+
+        mockMvc.perform(post("/api/offers/" + offer.getId() + "/publish")
+                        .header("Authorization", "Bearer " + vendorToken("vendor-1")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("PUBLISHED"));
+        org.assertj.core.api.Assertions.assertThat(offerOutboxRepository.findAll()).hasSize(1);
+
+        mockMvc.perform(post("/api/offers/" + offer.getId() + "/publish")
+                        .header("Authorization", "Bearer " + vendorToken("vendor-1")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("PUBLISHED"));
+    }
+
+    @Test
+    void unpublishesPublishedOfferAndRecordsRemoval() throws Exception {
+        Offer offer = new Offer("vendor-1", UUID.randomUUID(), "Published", "Offer");
+        offer.publish();
+        offerRepository.save(offer);
+
+        mockMvc.perform(post("/api/offers/" + offer.getId() + "/unpublish")
+                        .header("Authorization", "Bearer " + vendorToken("vendor-1")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("DRAFT"));
+
+        org.assertj.core.api.Assertions.assertThat(offerOutboxRepository.findAll())
+                .hasSize(1)
+                .first()
+                .extracting(event -> event.getEventType())
+                .isEqualTo("offer.projection.removed.v1");
+    }
+
+    @Test
+    void deletesPublishedOfferAndRecordsRemoval() throws Exception {
+        Offer offer = new Offer("vendor-1", UUID.randomUUID(), "Published", "Offer");
+        offer.publish();
+        offerRepository.save(offer);
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete(
+                        "/api/offers/" + offer.getId())
+                        .header("Authorization", "Bearer " + vendorToken("vendor-1")))
+                .andExpect(status().isNoContent());
+
+        org.assertj.core.api.Assertions.assertThat(offerRepository.findById(offer.getId())).isEmpty();
+        org.assertj.core.api.Assertions.assertThat(offerOutboxRepository.findAll())
+                .hasSize(1)
+                .first()
+                .extracting(event -> event.getEventType())
+                .isEqualTo("offer.projection.removed.v1");
+    }
+
+    @Test
+    void rejectsPublishingExpiredOffer() throws Exception {
+        Offer offer = offerRepository.save(new Offer(
+                "vendor-1", UUID.randomUUID(), "Expired", "Expired offer",
+                Instant.parse("2026-10-01T00:00:00Z"),
+                Instant.parse("2026-10-02T00:00:00Z")
+        ));
+
+        mockMvc.perform(post("/api/offers/" + offer.getId() + "/publish")
+                        .header("Authorization", "Bearer " + vendorToken()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("INVALID_OFFER_VALIDITY"));
+    }
+
+    @Test
+    void doesNotAllowAnotherVendorToPublishOffer() throws Exception {
+        Offer offer = offerRepository.save(new Offer(
+                "vendor-1", UUID.randomUUID(), "Draft title", "Draft description"
+        ));
+
+        mockMvc.perform(post("/api/offers/" + offer.getId() + "/publish")
+                        .header("Authorization", "Bearer " + vendorToken("vendor-2")))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error.code").value("OFFER_NOT_FOUND"));
+    }
+
+    @Test
+    void publiclyReadsPublishedOfferWithoutAuthentication() throws Exception {
+        Offer offer = new Offer(
+                "vendor-1", UUID.randomUUID(), "Public title", "Public description"
+        );
+        offerRepository.save(offer);
+        jdbcTemplate.update("update offers set status = 'PUBLISHED' where id = ?", offer.getId());
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(
+                        "/api/offers/public/" + offer.getId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(offer.getId().toString()))
+                .andExpect(jsonPath("$.storeId").value(offer.getStoreId().toString()))
+                .andExpect(jsonPath("$.storeName").value("Corner Market"))
+                .andExpect(jsonPath("$.storeCity").value("New York"))
+                .andExpect(jsonPath("$.title").value("Public title"))
+                .andExpect(jsonPath("$.status").value("PUBLISHED"))
+                .andExpect(jsonPath("$.vendorId").doesNotExist());
+    }
+
+    @Test
+    void doesNotPubliclyReadDraftOffer() throws Exception {
+        Offer offer = offerRepository.save(new Offer(
+                "vendor-1", UUID.randomUUID(), "Draft title", "Draft description"
+        ));
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(
+                        "/api/offers/public/" + offer.getId()))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error.code").value("OFFER_NOT_FOUND"));
+    }
+
+    @Test
+    void doesNotPubliclyReadExpiredPublishedOffer() throws Exception {
+        Offer offer = new Offer(
+                "vendor-1", UUID.randomUUID(), "Expired title", "Expired description",
+                Instant.parse("2026-10-01T00:00:00Z"),
+                Instant.parse("2026-10-02T00:00:00Z")
+        );
+        offerRepository.save(offer);
+        jdbcTemplate.update("update offers set status = 'PUBLISHED' where id = ?", offer.getId());
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(
+                        "/api/offers/public/" + offer.getId()))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error.code").value("OFFER_NOT_FOUND"));
+    }
+
+    @Test
+    void publiclyListsOnlyPublishedOffersWithPaginationMetadata() throws Exception {
+        Offer publishedOne = new Offer(
+                "vendor-1", UUID.randomUUID(), "Published one", "Description one");
+        publishedOne.publish();
+        offerRepository.save(publishedOne);
+
+        Offer publishedTwo = new Offer(
+                "vendor-2", UUID.randomUUID(), "Published two", "Description two");
+        publishedTwo.publish();
+        offerRepository.save(publishedTwo);
+
+        offerRepository.save(new Offer(
+                "vendor-3", UUID.randomUUID(), "Draft offer", "Draft description"));
+        Offer expired = new Offer(
+                "vendor-4", UUID.randomUUID(), "Expired offer", "Expired description",
+                Instant.parse("2026-10-01T00:00:00Z"),
+                Instant.parse("2026-10-02T00:00:00Z")
+        );
+        offerRepository.save(expired);
+        jdbcTemplate.update("update offers set status = 'PUBLISHED' where id = ?", expired.getId());
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(
+                        "/api/offers/public?page=0&size=1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.offers.length()").value(1))
+                .andExpect(jsonPath("$.offers[0].status").value("PUBLISHED"))
+                .andExpect(jsonPath("$.offers[0].storeName").value("Corner Market"))
+                .andExpect(jsonPath("$.offers[0].storeCity").value("New York"))
+                .andExpect(jsonPath("$.offers[0].vendorId").doesNotExist())
+                .andExpect(jsonPath("$.page").value(0))
+                .andExpect(jsonPath("$.size").value(1))
+                .andExpect(jsonPath("$.totalElements").value(2))
+                .andExpect(jsonPath("$.totalPages").value(2));
+    }
+
+    @Test
+    void rejectsInvalidPublicPagination() throws Exception {
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(
+                        "/api/offers/public?page=0&size=51"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("INVALID_PAGINATION"));
+    }
+
+    private String vendorToken() throws Exception {
+        return vendorToken("vendor-1");
+    }
+
+    private String vendorToken(String vendorId) throws Exception {
+        String header = encode("{\"alg\":\"HS256\",\"typ\":\"JWT\"}");
+        String payload = encode("{\"sub\":\"" + vendorId + "\",\"role\":\"VENDOR\"}");
+        String input = header + "." + payload;
+        Mac mac = Mac.getInstance("HmacSHA256");
+        mac.init(new SecretKeySpec("test-secret".getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+        return input + "." + Base64.getUrlEncoder().withoutPadding()
+                .encodeToString(mac.doFinal(input.getBytes(StandardCharsets.UTF_8)));
+    }
+    private String encode(String value) {
+        return Base64.getUrlEncoder().withoutPadding()
+                .encodeToString(value.getBytes(StandardCharsets.UTF_8));
+    }
+}

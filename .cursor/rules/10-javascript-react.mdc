@@ -1,0 +1,13 @@
+---
+description: JavaScript and React implementation conventions
+globs: **/*.js, **/*.jsx, **/*.mjs, **/*.cjs
+alwaysApply: false
+---
+# JavaScript / React Rules
+
+- Match the existing package manager, module system, lint rules, and component patterns.
+- Do not introduce TypeScript unless explicitly approved; the project requirement is JavaScript.
+- Validate user input at boundaries and handle async errors explicitly.
+- Keep components focused and accessible. Include loading, empty, success, and error states where relevant.
+- Avoid adding dependencies unless the benefit is explained.
+- Add tests for user-visible behavior and important edge cases.

@@ -1,0 +1,16 @@
+server:
+  port: ${PORT:8083}
+spring:
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/dealnear}
+    username: ${DATABASE_USERNAME:dealnear}
+    password: ${DATABASE_PASSWORD:dealnear}
+    hikari:
+      connection-init-sql: SET search_path TO ${DATABASE_SCHEMA:discovery_service}, public
+  flyway:
+    enabled: true
+    schemas: ${DATABASE_SCHEMA:discovery_service}
+    default-schema: ${DATABASE_SCHEMA:discovery_service}
+    table: discovery_service_schema_history
+dealnear:
+  projection-token: ${DISCOVERY_PROJECTION_TOKEN:local-development-projection-token}

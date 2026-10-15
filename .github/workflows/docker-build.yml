@@ -1,0 +1,47 @@
+name: Docker build
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+# Only one build per branch at a time
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-images:
+    name: Build Docker images
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - name: identity-service
+            context: services/identity-service
+          - name: vendor-service
+            context: services/vendor-service
+          - name: offer-service
+            context: services/offer-service
+          - name: discovery-service
+            context: services/discovery-service
+          - name: api-gateway
+            context: services/api-gateway
+          - name: customer-web
+            context: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build ${{ matrix.service.name }}
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.service.context }}
+          push: false
+          tags: dealnear/${{ matrix.service.name }}:${{ github.sha }}
+          cache-from: type=gha,scope=${{ matrix.service.name }}
+          cache-to: type=gha,scope=${{ matrix.service.name }},mode=max

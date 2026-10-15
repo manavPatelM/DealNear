@@ -1,0 +1,12 @@
+---
+description: Test selection and verification expectations
+globs: **/*test*, **/*spec*, **/tests/**, **/test/**
+alwaysApply: false
+---
+# Testing Rules
+
+- Test observable behavior, not implementation details alone.
+- Cover successful behavior, invalid input, authorization failures, and relevant edge cases.
+- Prefer deterministic tests that do not require AWS.
+- Run the smallest relevant test first, then broader checks appropriate to the change.
+- If a check is unavailable or not run, say so clearly. Never weaken assertions just to make a test pass.

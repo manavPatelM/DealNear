@@ -1,0 +1,35 @@
+# Dependencies and build output
+node_modules/
+dist/
+build/
+coverage/
+target/
+*.class
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# IDE and editor files
+.idea/
+.vscode/
+*.iml
+
+# JavaScript tooling
+.npm/
+.eslintcache
+
+# Terraform state and local working data
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+

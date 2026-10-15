@@ -1,0 +1,3 @@
+ALTER TABLE offer_projections
+    ADD COLUMN projection_version TIMESTAMP WITH TIME ZONE NOT NULL
+        DEFAULT CURRENT_TIMESTAMP;

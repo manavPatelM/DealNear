@@ -1,0 +1,20 @@
+server:
+  port: ${PORT:8084}
+spring:
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/dealnear}
+    username: ${DATABASE_USERNAME:dealnear}
+    password: ${DATABASE_PASSWORD:dealnear}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate.default_schema: ${DATABASE_SCHEMA:identity_service}
+  flyway:
+    enabled: true
+    schemas: identity_service
+    default-schema: identity_service
+    table: identity_service_schema_history
+dealnear:
+  jwt-secret: ${JWT_SECRET:local-development-secret-change-me}

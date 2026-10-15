@@ -1,0 +1,14 @@
+---
+description: Docker, Terraform, Kubernetes, AWS, CI/CD, and security safeguards
+globs: **/Dockerfile*, **/compose*.yml, **/compose*.yaml, **/*.tf, **/*.yaml, **/*.yml, **/.github/workflows/**
+alwaysApply: false
+---
+# Infrastructure and Security Rules
+
+- Inspect existing infrastructure and cost implications before editing.
+- Run formatting and validation checks available in the repository.
+- Review Terraform plans before applying. Never apply or destroy without explicit approval.
+- Do not put credentials in source files, image layers, Terraform outputs, or logs.
+- Prefer least-privilege IAM, GitHub OIDC, non-root containers, health probes, resource limits, and private networking where appropriate.
+- Do not expose internal services publicly without a requirement.
+- Warn about resources that may incur ongoing charges and explain teardown implications.

@@ -1,0 +1,23 @@
+server:
+  port: ${PORT:8081}
+
+spring:
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/dealnear}
+    username: ${DATABASE_USERNAME:dealnear}
+    password: ${DATABASE_PASSWORD:dealnear}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true
+
+dealnear:
+  jwt-secret: ${JWT_SECRET:local-development-secret-change-me}
+  projection-token: ${VENDOR_PROJECTION_TOKEN:local-development-projection-token}
+  discovery-service-url: ${DISCOVERY_SERVICE_URL:http://localhost:8083}
+  store-projection-dispatcher:
+    enabled: ${STORE_PROJECTION_DISPATCHER_ENABLED:false}
+    interval-ms: ${STORE_PROJECTION_DISPATCHER_INTERVAL_MS:5000}
+    timeout-ms: ${STORE_PROJECTION_DISPATCHER_TIMEOUT_MS:2000}

@@ -1,0 +1,16 @@
+---
+description: Core DealNear product, architecture, AI workflow, and safety constraints
+alwaysApply: true
+---
+# DealNear Core Rules
+
+- Read `AGENTS.md` for repository-wide instructions. Read relevant docs before changing architecture.
+- DealNear is a hyperlocal offers platform for customers, vendors, and admins. Preserve the approved MVP scope.
+- Application languages are JavaScript and Java. Frontend is React with JavaScript; backend boundaries follow `docs/architecture/ARCHITECTURE.md`.
+- Work on one approved task at a time. Do not start the next task, broaden scope, or perform unrelated cleanup.
+- Inspect the repository before editing. Prefer the smallest coherent diff.
+- Do not invent existing commands, test results, infrastructure, API contracts, or configuration. Inspect files first.
+- Add/update tests and docs for behavior changes. Report only commands actually run and results actually observed.
+- Never commit secrets, log credentials/tokens, bypass authorization, or access another service's database directly.
+- Never execute Terraform apply/destroy, cloud provisioning, production deployment, or destructive data commands without explicit user approval.
+- Stop after the task and provide a review report. Wait for user approval before proceeding.

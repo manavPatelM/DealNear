@@ -1,0 +1,13 @@
+---
+description: API and event contract conventions for DealNear
+globs: **/openapi/**, **/contracts/**, **/*Controller.java, **/*controller*.js, **/*route*.js
+alwaysApply: false
+---
+# API and Event Contracts
+
+- Define request/response schemas, validation, status codes, and error shape explicitly.
+- Preserve backward compatibility unless a versioned breaking change is approved.
+- Apply pagination and query bounds to list/search endpoints.
+- Enforce user roles and vendor/store ownership on every relevant operation.
+- For events, version schemas, include event identity and timestamp, and make consumers idempotent.
+- Do not claim database writes and event publication are atomic without a reliable mechanism such as an outbox.

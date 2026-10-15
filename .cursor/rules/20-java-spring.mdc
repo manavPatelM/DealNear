@@ -1,0 +1,13 @@
+---
+description: Java and Spring Boot service conventions
+globs: **/*.java, **/pom.xml, **/build.gradle, **/build.gradle.kts
+alwaysApply: false
+---
+# Java / Spring Boot Rules
+
+- Follow the repository's established Java and Spring Boot versions; inspect before choosing versions.
+- Keep controllers thin. Put business rules in service/domain layers and persistence logic behind repositories.
+- Validate request data and enforce authorization server-side.
+- Use explicit API DTOs instead of exposing persistence entities directly.
+- Use database migrations for schema evolution; do not rely on automatic production schema creation.
+- Add unit and relevant integration/contract tests. Do not claim tests pass unless run.

@@ -1,0 +1,35 @@
+server:
+  port: ${PORT:8082}
+spring:
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/dealnear}
+    username: ${DATABASE_USERNAME:dealnear}
+    password: ${DATABASE_PASSWORD:dealnear}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate.default_schema: ${DATABASE_SCHEMA:offer_service}
+  flyway:
+    enabled: true
+    schemas: ${DATABASE_SCHEMA:offer_service}
+    default-schema: ${DATABASE_SCHEMA:offer_service}
+    table: offer_service_schema_history
+dealnear:
+  jwt-secret: ${JWT_SECRET:local-development-secret-change-me}
+  vendor-service-url: ${VENDOR_SERVICE_URL:http://localhost:8081}
+  discovery-service-url: ${DISCOVERY_SERVICE_URL:http://localhost:8083}
+  vendor-projection-token: ${VENDOR_PROJECTION_TOKEN:local-development-projection-token}
+  discovery-projection-token: ${DISCOVERY_PROJECTION_TOKEN:local-development-projection-token}
+  projection-dispatcher:
+    enabled: ${PROJECTION_DISPATCHER_ENABLED:false}
+    interval-ms: ${PROJECTION_DISPATCHER_INTERVAL_MS:5000}
+    timeout-ms: ${PROJECTION_DISPATCHER_TIMEOUT_MS:2000}
+    retry-base-delay-seconds: ${PROJECTION_DISPATCHER_RETRY_BASE_DELAY_SECONDS:5}
+    retry-max-delay-seconds: ${PROJECTION_DISPATCHER_RETRY_MAX_DELAY_SECONDS:300}
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,metrics
