@@ -2,6 +2,8 @@ package com.dealnear.vendor.store;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
@@ -10,6 +12,9 @@ import java.util.UUID;
 @Entity
 @Table(name = "stores")
 public class Store {
+    /** Admin review state. Only VERIFIED stores can publish offers or appear publicly. */
+    public enum VerificationStatus { PENDING, VERIFIED, REJECTED }
+
     @Id
     private UUID id;
 
@@ -34,6 +39,16 @@ public class Store {
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "verification_status", nullable = false)
+    private VerificationStatus verificationStatus;
+
+    @Column(name = "verification_note", length = 500)
+    private String verificationNote;
+
+    @Column(name = "reviewed_at")
+    private Instant reviewedAt;
+
     protected Store() {
     }
 
@@ -46,6 +61,7 @@ public class Store {
         this.latitude = latitude;
         this.longitude = longitude;
         this.createdAt = Instant.now();
+        this.verificationStatus = VerificationStatus.PENDING;
     }
 
     public UUID getId() {
@@ -80,11 +96,50 @@ public class Store {
         return createdAt;
     }
 
+    public VerificationStatus getVerificationStatus() {
+        return verificationStatus;
+    }
+
+    public String getVerificationNote() {
+        return verificationNote;
+    }
+
+    public Instant getReviewedAt() {
+        return reviewedAt;
+    }
+
+    public boolean isVerified() {
+        return verificationStatus == VerificationStatus.VERIFIED;
+    }
+
     public void update(String name, String address, String city, double latitude, double longitude) {
         this.name = name;
         this.address = address;
         this.city = city;
         this.latitude = latitude;
         this.longitude = longitude;
+        // Editing a rejected store is treated as a resubmission for review.
+        if (verificationStatus == VerificationStatus.REJECTED) {
+            verificationStatus = VerificationStatus.PENDING;
+        }
+    }
+
+    void verify(Instant now) {
+        if (verificationStatus == VerificationStatus.VERIFIED) {
+            throw new InvalidStoreTransitionException("Store is already verified");
+        }
+        verificationStatus = VerificationStatus.VERIFIED;
+        verificationNote = null;
+        reviewedAt = now;
+    }
+
+    /** Rejects a pending submission or revokes an existing verification. */
+    void reject(String note, Instant now) {
+        if (verificationStatus == VerificationStatus.REJECTED) {
+            throw new InvalidStoreTransitionException("Store is already rejected");
+        }
+        verificationStatus = VerificationStatus.REJECTED;
+        verificationNote = note;
+        reviewedAt = now;
     }
 }

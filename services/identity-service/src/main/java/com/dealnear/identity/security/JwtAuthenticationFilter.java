@@ -46,9 +46,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 return;
             }
             JsonNode claims = objectMapper.readTree(Base64.getUrlDecoder().decode(parts[1]));
+            // Tokens without a future expiry are rejected so leaked tokens stop working.
+            if (isExpired(claims)) {
+                return;
+            }
             String subject = claims.path("sub").asText("");
             String role = claims.path("role").asText("");
-            if (!subject.isBlank() && (role.equals("CUSTOMER") || role.equals("VENDOR"))) {
+            if (!subject.isBlank() && (role.equals("CUSTOMER") || role.equals("VENDOR") || role.equals("ADMIN"))) {
                 SecurityContextHolder.getContext().setAuthentication(
                         new UsernamePasswordAuthenticationToken(
                                 subject,
@@ -59,6 +63,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         } catch (IOException | RuntimeException ignored) {
             SecurityContextHolder.clearContext();
         }
+    }
+
+    private boolean isExpired(JsonNode claims) {
+        JsonNode exp = claims.path("exp");
+        return !exp.canConvertToLong() || exp.asLong() <= java.time.Instant.now().getEpochSecond();
     }
 
     private boolean verify(String signingInput, String encodedSignature) {

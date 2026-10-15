@@ -145,3 +145,21 @@ DATABASE_PASSWORD=dealnear
 JWT_SECRET=replace-with-a-local-secret
 VENDOR_PROJECTION_TOKEN=replace-with-a-projection-secret
 ```
+
+## Store verification (DN-037, ADR-033)
+
+Store responses include `verificationStatus` (`PENDING`, `VERIFIED`,
+`REJECTED`), `verificationNote`, and `reviewedAt`. New stores start `PENDING`;
+editing a `REJECTED` store moves it back to `PENDING`. Public summaries
+(`/public/{id}`, `/public?ids=`, max 50 ids) only return `VERIFIED` stores. The
+projection details response adds `storeActive`.
+
+Admin endpoints require an `ADMIN` token:
+
+- `GET /api/vendors/admin/stores?status=PENDING&page=0&size=20` — oldest first.
+- `POST /api/vendors/admin/stores/{storeId}/verify`
+- `POST /api/vendors/admin/stores/{storeId}/reject` with `{ "reason": "..." }`
+  (1–500 characters, shown to the vendor). Rejecting a verified store revokes it.
+
+Repeating a decision returns `409 INVALID_STORE_TRANSITION`. Each decision
+records a store projection event so discovery hides or shows the store's offers.

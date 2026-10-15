@@ -37,7 +37,8 @@ public class SecurityConfig {
                         .requestMatchers("/health").permitAll()
                         .requestMatchers("/api/vendors/stores/public/**").permitAll()
                         .requestMatchers("/api/vendors/stores/projection/**").permitAll()
-                        .anyRequest().authenticated()
+                        .requestMatchers("/api/vendors/admin/**").hasRole("ADMIN")
+                        .anyRequest().hasRole("VENDOR")
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
                 .build();

@@ -33,3 +33,9 @@ crash.*.log
 .DS_Store
 Thumbs.db
 
+
+# Production secrets (generated on the server)
+.env.prod
+infra/aws/.terraform/
+infra/aws/*.tfstate*
+infra/aws/terraform.tfvars

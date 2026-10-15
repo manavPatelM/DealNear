@@ -11,7 +11,10 @@ public record StoreResponse(
         String city,
         double latitude,
         double longitude,
-        Instant createdAt
+        Instant createdAt,
+        String verificationStatus,
+        String verificationNote,
+        Instant reviewedAt
 ) {
     public static StoreResponse from(Store store) {
         return new StoreResponse(
@@ -22,7 +25,10 @@ public record StoreResponse(
                 store.getCity(),
                 store.getLatitude(),
                 store.getLongitude(),
-                store.getCreatedAt()
+                store.getCreatedAt(),
+                store.getVerificationStatus().name(),
+                store.getVerificationNote(),
+                store.getReviewedAt()
         );
     }
 }

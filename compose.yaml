@@ -37,13 +37,16 @@ services:
 
   vendor-service:
     build: ./services/vendor-service
-    environment: &java-environment
-      DATABASE_URL: jdbc:postgresql://postgres:5432/dealnear
-      DATABASE_USERNAME: dealnear
-      DATABASE_PASSWORD: dealnear
-      JWT_SECRET: local-development-secret-change-me
-      VENDOR_PROJECTION_TOKEN: local-development-projection-token
-      DISCOVERY_SERVICE_URL: http://discovery-service:8083
+    environment:
+      <<: &java-environment
+        DATABASE_URL: jdbc:postgresql://postgres:5432/dealnear
+        DATABASE_USERNAME: dealnear
+        DATABASE_PASSWORD: dealnear
+        JWT_SECRET: local-development-secret-change-me
+        VENDOR_PROJECTION_TOKEN: local-development-projection-token
+        DISCOVERY_SERVICE_URL: http://discovery-service:8083
+      # The store projection outbox lives in vendor-service, so its dispatcher runs here.
+      STORE_PROJECTION_DISPATCHER_ENABLED: "true"
     depends_on:
       postgres:
         condition: service_healthy
@@ -66,7 +69,6 @@ services:
       VENDOR_SERVICE_URL: http://vendor-service:8081
       DISCOVERY_SERVICE_URL: http://discovery-service:8083
       PROJECTION_DISPATCHER_ENABLED: "true"
-      STORE_PROJECTION_DISPATCHER_ENABLED: "true"
       DISCOVERY_PROJECTION_TOKEN: local-development-projection-token
     depends_on:
       postgres:
@@ -91,6 +93,10 @@ services:
       DATABASE_USERNAME: dealnear
       DATABASE_PASSWORD: dealnear
       JWT_SECRET: local-development-secret-change-me
+      JWT_TTL_SECONDS: "3600"
+      # Local-only bootstrap admin for the admin portal. Never reuse these values elsewhere.
+      ADMIN_BOOTSTRAP_EMAIL: admin@dealnear.local
+      ADMIN_BOOTSTRAP_PASSWORD: local-admin-password
     depends_on:
       postgres:
         condition: service_healthy
@@ -110,6 +116,8 @@ services:
       OFFER_SERVICE_URL: http://offer-service:8082
       DISCOVERY_SERVICE_URL: http://discovery-service:8083
       IDENTITY_SERVICE_URL: http://identity-service:8084
+      # JVM services can take several seconds on their first request after startup.
+      GATEWAY_PROXY_TIMEOUT_MS: "10000"
     depends_on:
       vendor-service:
         condition: service_healthy
@@ -129,9 +137,11 @@ services:
       start_period: 10s
 
   customer-web:
-    build: ./frontend
-    environment:
-      VITE_API_URL: http://localhost:3000
+    build:
+      context: ./frontend
+      # Empty: the web container's nginx proxies /api to the gateway (same origin).
+      args:
+        VITE_API_URL: ""
     depends_on:
       api-gateway:
         condition: service_healthy

@@ -50,3 +50,17 @@ missing reference is idempotent and returns `204 No Content`.
 
 Returns the authenticated customer's saved references, newest first. All
 saved-offer endpoints require a customer bearer token.
+
+## Token lifetime (DN-033)
+
+Access tokens carry `sub`, `role`, `iat`, and `exp`. The lifetime is
+`JWT_TTL_SECONDS` (default `3600`), and responses include `expiresAt`. All
+services reject tokens with a missing, non-numeric, or past `exp`.
+
+## Admin accounts (DN-037)
+
+Roles are `CUSTOMER`, `VENDOR`, and `ADMIN`. Admins cannot register through the
+API. When `ADMIN_BOOTSTRAP_EMAIL` and `ADMIN_BOOTSTRAP_PASSWORD` (minimum 12
+characters) are both set, identity-service creates that admin at startup if the
+email is unused. Admins sign in with `POST /api/auth/login` and may call
+`GET /api/auth/me`; saved offers remain customer-only.

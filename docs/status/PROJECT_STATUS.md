@@ -66,6 +66,20 @@ GitHub Actions CI workflows are now established:
 - `.github/workflows/secret-scan.yml`: automated gitleaks secret detection across git history.
 - `ADR-032`: standard API error envelope `{ error: { code, message, details } }` and backward-compatible URI/event versioning documented and wired across services.
 
+MVP completion (DN-033 to DN-039, verified 2026-10-15):
+- JWTs expire (`exp`, `JWT_TTL_SECONDS`) and every service rejects expired tokens.
+- Offers have categories; nearby and public listings filter by category.
+- Offer lifecycle: draft, publish, pause/resume, end now, admin removal (ADR-033).
+- Customers can browse all offers, open offer details with the store's other offers,
+  see saved offers by title, and report offers.
+- Admin role with bootstrap account; store verification gates publishing and
+  discovery; moderation queue with dismiss/remove.
+- React app has Customer, Vendor, and Admin portals.
+- `scripts/smoke-test.mjs` passed all 9 end-to-end checks against the local Compose
+  stack (PostgreSQL/PostGIS, outbox dispatchers, nginx proxy).
+- Single-host AWS deployment is defined in `infra/aws` (Terraform validated, not yet
+  applied) and documented in `docs/deploy/AWS_DEPLOYMENT.md`.
+
 ## Working locally
 - [ ] Repository cloned and dependencies installed
 - [x] Documented local checks pass
@@ -84,9 +98,12 @@ GitHub Actions CI workflows are now established:
   discovery services with upstream timeouts.
 - PostgreSQL runtime is configured and local Compose verification is part of the
   developer workflow.
-- JWTs do not expire (no exp claim); this is a known pre-existing limitation to
-  address before production.
-- The repository has no commits or configured upstream branch.
+- No refresh tokens; users sign in again when the access token expires.
+- Public listing totals may count offers whose store verification was revoked.
+- No automated browser (UI) tests yet.
+- Each JVM service's first request after startup can take several seconds; the
+  gateway timeout is 10s in Compose.
 
 ## Next task
-DN-033: JWT expiration and token validation hardening in identity-service, or Kafka/Redis architectural decision ADR.
+Apply the AWS demo deployment (`docs/deploy/AWS_DEPLOYMENT.md`), then DN-040:
+build/push images to ECR from CI with GitHub OIDC.

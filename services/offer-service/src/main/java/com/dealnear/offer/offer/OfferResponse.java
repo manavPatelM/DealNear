@@ -12,11 +12,15 @@ public record OfferResponse(
         String status,
         Instant createdAt,
         Instant startAt,
-        Instant endAt
+        Instant endAt,
+        String category,
+        boolean expired,
+        String moderationNote
 ) {
     public static OfferResponse from(Offer offer) {
         return new OfferResponse(offer.getId(), offer.getVendorId(), offer.getStoreId(),
                 offer.getTitle(), offer.getDescription(), offer.getStatus().name(), offer.getCreatedAt(),
-                offer.getStartAt(), offer.getEndAt());
+                offer.getStartAt(), offer.getEndAt(), offer.getCategory().name(),
+                offer.isExpired(Instant.now()), offer.getModerationNote());
     }
 }

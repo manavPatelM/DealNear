@@ -17,6 +17,12 @@ public record ProjectionOfferRequest(
         @NotNull Instant createdAt,
         @NotNull Instant projectionVersion,
         @NotNull Double latitude,
-        @NotNull Double longitude
+        @NotNull Double longitude,
+        String category,
+        Boolean storeActive
 ) {
+    /** Producers that predate store verification omit the flag; their stores were all eligible. */
+    boolean storeActiveOrDefault() {
+        return storeActive == null || storeActive;
+    }
 }

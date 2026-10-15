@@ -1,5 +1,6 @@
 package com.dealnear.discovery.api;
 
+import java.time.Instant;
 import java.util.UUID;
 
 public record DiscoveryOfferResponse(
@@ -9,6 +10,9 @@ public record DiscoveryOfferResponse(
         String storeCity,
         String title,
         String description,
-        double distanceKm
+        double distanceKm,
+        String category,
+        Instant startAt,
+        Instant endAt
 ) {
 }

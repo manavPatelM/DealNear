@@ -5,6 +5,7 @@ import jakarta.validation.constraints.Size;
 
 public record UpdateOfferRequest(
         @NotBlank @Size(max = 255) String title,
-        @NotBlank @Size(max = 2000) String description
+        @NotBlank @Size(max = 2000) String description,
+        OfferCategory category
 ) {
 }

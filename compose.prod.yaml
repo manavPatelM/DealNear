@@ -1,0 +1,83 @@
+# Single-host production overrides (AWS EC2). Usage, from the repo root:
+#   docker compose -f compose.yaml -f compose.prod.yaml --env-file .env.prod up -d --build
+# Secrets come from .env.prod (never committed); see .env.prod.example.
+# Only Caddy is reachable from outside: it terminates HTTPS and forwards to the web container.
+
+x-jvm: &jvm
+  JAVA_TOOL_OPTIONS: "-Xms128m -Xmx320m -XX:+UseSerialGC"
+
+services:
+  postgres:
+    environment:
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD:?set DATABASE_PASSWORD in .env.prod}
+    ports: !reset []
+    restart: unless-stopped
+
+  discovery-service:
+    environment:
+      <<: *jvm
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD}
+      DISCOVERY_PROJECTION_TOKEN: ${PROJECTION_TOKEN:?set PROJECTION_TOKEN in .env.prod}
+    ports: !reset []
+    restart: unless-stopped
+
+  vendor-service:
+    environment:
+      <<: *jvm
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env.prod}
+      VENDOR_PROJECTION_TOKEN: ${PROJECTION_TOKEN}
+    ports: !reset []
+    restart: unless-stopped
+
+  offer-service:
+    environment:
+      <<: *jvm
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      VENDOR_PROJECTION_TOKEN: ${PROJECTION_TOKEN}
+      DISCOVERY_PROJECTION_TOKEN: ${PROJECTION_TOKEN}
+    ports: !reset []
+    restart: unless-stopped
+
+  identity-service:
+    environment:
+      <<: *jvm
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      ADMIN_BOOTSTRAP_EMAIL: ${ADMIN_BOOTSTRAP_EMAIL:?set ADMIN_BOOTSTRAP_EMAIL in .env.prod}
+      ADMIN_BOOTSTRAP_PASSWORD: ${ADMIN_BOOTSTRAP_PASSWORD:?set ADMIN_BOOTSTRAP_PASSWORD in .env.prod}
+    ports: !reset []
+    restart: unless-stopped
+
+  api-gateway:
+    environment:
+      CORS_ORIGIN: ${PUBLIC_ORIGIN:-https://localhost}
+    ports: !reset []
+    restart: unless-stopped
+
+  customer-web:
+    ports: !reset []
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2.8.4-alpine
+    environment:
+      # A domain name (e.g. deals.example.com) gets an automatic Let's Encrypt certificate.
+      # ":80" serves plain HTTP on the instance IP until a domain is pointed at it.
+      SITE_ADDRESS: ${SITE_ADDRESS:-:80}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      customer-web:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  caddy-data:
+  caddy-config:

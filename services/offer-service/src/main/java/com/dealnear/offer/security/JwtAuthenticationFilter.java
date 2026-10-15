@@ -36,15 +36,22 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             String[] parts = token.split("\\.", -1);
             if (parts.length != 3 || !verify(parts[0] + "." + parts[1], parts[2])) return;
             JsonNode claims = objectMapper.readTree(Base64.getUrlDecoder().decode(parts[1]));
+            if (isExpired(claims)) return;
             String subject = claims.path("sub").asText("");
-            if (!subject.isBlank() && claims.path("role").asText("").equals("VENDOR")) {
+            String role = claims.path("role").asText("");
+            if (!subject.isBlank() && java.util.Set.of("VENDOR", "CUSTOMER", "ADMIN").contains(role)) {
                 SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
-                        subject, null, java.util.List.of(new SimpleGrantedAuthority("ROLE_VENDOR"))));
+                        subject, null, java.util.List.of(new SimpleGrantedAuthority("ROLE_" + role))));
             }
         } catch (IOException | RuntimeException ignored) {
             SecurityContextHolder.clearContext();
         }
     }
+    private boolean isExpired(JsonNode claims) {
+        JsonNode exp = claims.path("exp");
+        return !exp.canConvertToLong() || exp.asLong() <= java.time.Instant.now().getEpochSecond();
+    }
+
     private boolean verify(String input, String signature) {
         try {
             Mac mac = Mac.getInstance("HmacSHA256");

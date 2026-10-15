@@ -10,3 +10,6 @@ spring:
     enabled: false
 dealnear:
   jwt-secret: test-secret
+  bootstrap-admin:
+    email: admin@example.com
+    password: test-admin-password

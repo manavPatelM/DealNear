@@ -1,0 +1,60 @@
+#!/bin/bash
+# First-boot setup for the DealNear single-host deployment. Output: /var/log/dealnear-bootstrap.log
+set -euo pipefail
+exec > >(tee -a /var/log/dealnear-bootstrap.log) 2>&1
+
+APP_DIR=/opt/dealnear
+
+# Swap keeps parallel Maven image builds from exhausting 4 GiB of RAM.
+if [ ! -f /swapfile ]; then
+  dd if=/dev/zero of=/swapfile bs=1M count=4096
+  chmod 600 /swapfile
+  mkswap /swapfile
+  swapon /swapfile
+  echo '/swapfile none swap sw 0 0' >> /etc/fstab
+fi
+
+dnf install -y docker git openssl
+systemctl enable --now docker
+
+# Amazon Linux's Docker package ships without the compose and buildx CLI plugins.
+mkdir -p /usr/local/lib/docker/cli-plugins
+curl -fsSL -o /usr/local/lib/docker/cli-plugins/docker-compose \
+  https://github.com/docker/compose/releases/download/v2.29.7/docker-compose-linux-x86_64
+curl -fsSL -o /usr/local/lib/docker/cli-plugins/docker-buildx \
+  https://github.com/docker/buildx/releases/download/v0.17.1/buildx-v0.17.1.linux-amd64
+chmod +x /usr/local/lib/docker/cli-plugins/docker-compose /usr/local/lib/docker/cli-plugins/docker-buildx
+
+if [ ! -d "$APP_DIR/.git" ]; then
+  git clone --branch "${repo_branch}" --depth 1 "${repo_url}" "$APP_DIR"
+fi
+cd "$APP_DIR"
+
+# Secrets are generated once on the instance and never leave it.
+if [ ! -f .env.prod ]; then
+  rand() { openssl rand -hex "$1"; }
+  if [ -n "${domain_name}" ]; then
+    SITE_ADDRESS="${domain_name}"
+    PUBLIC_ORIGIN="https://${domain_name}"
+  else
+    TOKEN=$(curl -fsS -X PUT http://169.254.169.254/latest/api/token -H "X-aws-ec2-metadata-token-ttl-seconds: 60")
+    PUBLIC_IP=$(curl -fsS -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/public-ipv4 || echo localhost)
+    SITE_ADDRESS=":80"
+    PUBLIC_ORIGIN="http://$PUBLIC_IP"
+  fi
+  umask 077
+  cat > .env.prod <<EOF
+DATABASE_PASSWORD=$(rand 24)
+JWT_SECRET=$(rand 32)
+PROJECTION_TOKEN=$(rand 24)
+ADMIN_BOOTSTRAP_EMAIL=${admin_email}
+ADMIN_BOOTSTRAP_PASSWORD=$(rand 12)
+SITE_ADDRESS=$SITE_ADDRESS
+PUBLIC_ORIGIN=$PUBLIC_ORIGIN
+EOF
+fi
+
+export COMPOSE_PARALLEL_LIMIT=2
+docker compose -f compose.yaml -f compose.prod.yaml --env-file .env.prod up -d --build
+
+echo "DealNear bootstrap finished"

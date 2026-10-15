@@ -108,16 +108,21 @@ public class StoreController {
         );
     }
 
+    // Public summaries only cover admin-verified stores, which hides unreviewed or
+    // rejected stores (and therefore their offers) from customers.
     @GetMapping("/public/{storeId}")
     public PublicStoreSummary getPublicSummary(@PathVariable UUID storeId) {
-        return storeRepository.findById(storeId)
+        return storeRepository.findByIdAndVerificationStatus(storeId, Store.VerificationStatus.VERIFIED)
                 .map(PublicStoreSummary::from)
                 .orElseThrow(StoreNotFoundException::new);
     }
 
     @GetMapping("/public")
     public List<PublicStoreSummary> getPublicSummaries(@RequestParam List<UUID> ids) {
-        return storeRepository.findAllById(ids).stream()
+        if (ids.size() > 50) {
+            throw new InvalidPaginationException();
+        }
+        return storeRepository.findAllByIdInAndVerificationStatus(ids, Store.VerificationStatus.VERIFIED).stream()
                 .map(PublicStoreSummary::from)
                 .toList();
     }

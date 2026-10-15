@@ -1,10 +1,13 @@
 package com.dealnear.offer.ownership;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -15,13 +18,28 @@ public class StoreOwnershipClient implements StoreOwnershipVerifier {
             .connectTimeout(Duration.ofSeconds(2))
             .build();
     private final String vendorServiceUrl;
+    private final ObjectMapper objectMapper;
 
-    public StoreOwnershipClient(@Value("${dealnear.vendor-service-url}") String vendorServiceUrl) {
+    public StoreOwnershipClient(
+            @Value("${dealnear.vendor-service-url}") String vendorServiceUrl,
+            ObjectMapper objectMapper
+    ) {
         this.vendorServiceUrl = vendorServiceUrl;
+        this.objectMapper = objectMapper;
     }
 
     @Override
     public boolean vendorOwnsStore(UUID storeId, String authorization) {
+        return fetchOwnedStore(storeId, authorization).isPresent();
+    }
+
+    @Override
+    public Optional<String> ownedStoreVerificationStatus(UUID storeId, String authorization) {
+        return fetchOwnedStore(storeId, authorization)
+                .map(store -> store.path("verificationStatus").asText("PENDING"));
+    }
+
+    private Optional<JsonNode> fetchOwnedStore(UUID storeId, String authorization) {
         try {
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(vendorServiceUrl + "/api/vendors/stores/" + storeId))
@@ -29,13 +47,16 @@ public class StoreOwnershipClient implements StoreOwnershipVerifier {
                     .header("Authorization", authorization)
                     .GET()
                     .build();
-            HttpResponse<Void> response = client.send(request, HttpResponse.BodyHandlers.discarding());
-            return response.statusCode() == 200;
+            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() != 200) {
+                return Optional.empty();
+            }
+            return Optional.of(objectMapper.readTree(response.body()));
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
-            return false;
+            return Optional.empty();
         } catch (java.io.IOException | IllegalArgumentException exception) {
-            return false;
+            return Optional.empty();
         }
     }
 }

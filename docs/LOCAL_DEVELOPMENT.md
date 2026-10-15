@@ -86,3 +86,17 @@ docker compose down
 
 The PostgreSQL volume is retained by default. To remove local database data,
 run `docker compose down -v` only when that data can be discarded.
+
+## Admin portal (local only)
+
+The Compose stack bootstraps a local admin through identity-service:
+
+- Email: `admin@dealnear.local`
+- Password: `local-admin-password`
+
+These values exist only in `compose.yaml` for local development. Outside it,
+supply `ADMIN_BOOTSTRAP_EMAIL`/`ADMIN_BOOTSTRAP_PASSWORD` from a secret store, or
+leave them unset. New vendor stores start as *pending review*: sign in on the
+Admin tab and verify the store before its offers can be published.
+
+Frontend helper tests run with `npm test` in `frontend`.

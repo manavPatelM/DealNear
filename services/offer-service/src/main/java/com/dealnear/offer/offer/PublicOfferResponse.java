@@ -14,7 +14,8 @@ public record PublicOfferResponse(
         String status,
         Instant createdAt,
         Instant startAt,
-        Instant endAt
+        Instant endAt,
+        String category
 ) {
     public static PublicOfferResponse from(Offer offer, StoreSummary store) {
         return new PublicOfferResponse(
@@ -27,7 +28,8 @@ public record PublicOfferResponse(
                 offer.getStatus().name(),
                 offer.getCreatedAt(),
                 offer.getStartAt(),
-                offer.getEndAt()
+                offer.getEndAt(),
+                offer.getCategory().name()
         );
     }
 }

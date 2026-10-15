@@ -439,3 +439,27 @@ a:hover { text-decoration: underline; }
   .navbar { padding: 0 16px; }
   .portal-switcher { padding: 0 16px; }
 }
+
+/* ─── Lifecycle, moderation & detail views ───────────────── */
+.badge-expired  { background: var(--bg-hover); color: var(--text-secondary); border: 1px solid var(--border); }
+.badge-removed  { background: var(--danger-dim); color: var(--danger); border: 1px solid #ef444433; }
+.muted-copy     { color: var(--text-secondary); font-size: .85rem; margin-bottom: 12px; }
+.inline-link    { display: inline; padding: 0 4px; }
+.form-actions   { display: flex; flex-wrap: wrap; gap: 12px; justify-content: flex-end; margin-top: 8px; }
+.center-pad     { text-align: center; padding: 32px; }
+.list-item-heading { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; flex-wrap: wrap; }
+.list-item-heading .list-item-title { flex: 1; min-width: 0; }
+.moderation-note {
+  margin-top: 6px; padding: 6px 10px; border-radius: var(--radius-sm);
+  background: var(--warning-dim); color: var(--warning); font-size: .78rem;
+}
+.offer-detail .detail-meta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.offer-detail .detail-meta .muted-copy { margin-bottom: 0; }
+.detail-description { color: var(--text-primary); line-height: 1.6; margin: 12px 0 16px; white-space: pre-line; }
+.detail-subheading  { font-size: .95rem; margin: 24px 0 8px; }
+.report-form        { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+.offer-card .btn    { margin-top: 12px; align-self: flex-start; }
+@media (max-width: 640px) {
+  .list-item { flex-wrap: wrap; }
+  .list-item-actions { width: 100%; flex-wrap: wrap; }
+}

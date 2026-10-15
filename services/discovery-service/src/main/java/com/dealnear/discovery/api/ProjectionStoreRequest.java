@@ -11,6 +11,11 @@ public record ProjectionStoreRequest(
         @NotBlank String storeCity,
         double latitude,
         double longitude,
-        @NotNull Instant projectionVersion
+        @NotNull Instant projectionVersion,
+        Boolean storeActive
 ) {
+    /** Producers that predate store verification omit the flag; their stores were all eligible. */
+    boolean storeActiveOrDefault() {
+        return storeActive == null || storeActive;
+    }
 }

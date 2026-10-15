@@ -10,6 +10,8 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 import com.dealnear.vendor.store.StoreNotFoundException;
 import com.dealnear.vendor.store.InvalidPaginationException;
 import com.dealnear.vendor.store.InvalidProjectionTokenException;
+import com.dealnear.vendor.store.InvalidStoreTransitionException;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 
 @RestControllerAdvice
 public class ApiExceptionHandler {
@@ -39,6 +41,21 @@ public class ApiExceptionHandler {
         return ResponseEntity.badRequest().body(Map.of(
                 "error", Map.of("code", "INVALID_PAGINATION", "message",
                         "Page must be non-negative and size must be between 1 and 50")
+        ));
+    }
+
+    @ExceptionHandler(InvalidStoreTransitionException.class)
+    ResponseEntity<Map<String, Object>> invalidStoreTransition(InvalidStoreTransitionException exception) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of(
+                "error", Map.of("code", "INVALID_STORE_TRANSITION", "message", exception.getMessage())
+        ));
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    ResponseEntity<Map<String, Object>> unreadableBody() {
+        return ResponseEntity.badRequest().body(Map.of(
+                "error", Map.of("code", "INVALID_REQUEST", "message",
+                        "Request body is malformed or contains an invalid value")
         ));
     }
 

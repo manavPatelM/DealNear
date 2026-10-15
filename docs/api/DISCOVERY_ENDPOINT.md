@@ -22,7 +22,7 @@ Optional query parameters:
 
 - `page`: zero-based page number, default `0`.
 - `size`: page size from `1` to `50`, default `20`.
-- `category`: exact category filter when categories are implemented.
+- `category`: exact category code filter (for example `GROCERY`); invalid codes return `400`.
 
 The initial response shape is:
 
@@ -66,3 +66,10 @@ validity window are eligible. The projection contract carries `startAt` and
 
 The endpoint must not fall back to an unfiltered global offer list when a
 location query cannot be executed.
+
+## Additions (DN-034, DN-037)
+
+Each result also includes `category`, `startAt`, and `endAt`. Projection
+requests accept optional `category` (stored as `OTHER` when absent) and
+`storeActive` (default `true`). Offers from stores that are not admin-verified
+are kept in the read model but excluded from results.

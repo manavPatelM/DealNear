@@ -113,7 +113,7 @@ public class OfferProjectionDispatcher {
     }
 
     private record StoreProjectionDetails(
-            UUID id, String name, String city, double latitude, double longitude
+            UUID id, String name, String city, double latitude, double longitude, Boolean storeActive
     ) {
     }
 
@@ -122,13 +122,13 @@ public class OfferProjectionDispatcher {
             String title, String description, java.time.Instant startAt,
             java.time.Instant endAt, java.time.Instant createdAt,
             java.time.Instant projectionVersion,
-            double latitude, double longitude
+            double latitude, double longitude, String category, Boolean storeActive
     ) {
         ProjectionRequest(OfferProjectionEvent offer, StoreProjectionDetails store) {
             this(offer.offerId(), offer.storeId(), store.name(), store.city(), offer.title(),
                     offer.description(), offer.startAt(), offer.endAt(), offer.createdAt(),
                     offer.projectionVersion(),
-                    store.latitude(), store.longitude());
+                    store.latitude(), store.longitude(), offer.category(), store.storeActive());
         }
     }
 

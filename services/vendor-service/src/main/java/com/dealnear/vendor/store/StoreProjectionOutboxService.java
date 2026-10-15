@@ -25,7 +25,8 @@ public class StoreProjectionOutboxService {
                     store.getId(),
                     objectMapper.writeValueAsString(new StoreProjectionUpdate(
                             store.getId(), store.getName(), store.getCity(),
-                            store.getLatitude(), store.getLongitude(), version
+                            store.getLatitude(), store.getLongitude(), version,
+                            store.isVerified()
                     )),
                     version
             ));
@@ -40,7 +41,8 @@ public class StoreProjectionOutboxService {
             String storeCity,
             double latitude,
             double longitude,
-            Instant projectionVersion
+            Instant projectionVersion,
+            boolean storeActive
     ) {
     }
 }

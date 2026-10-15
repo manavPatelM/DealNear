@@ -32,6 +32,12 @@ class StoreControllerTest {
     @Autowired
     private StoreProjectionOutboxRepository projectionOutboxRepository;
 
+    @org.junit.jupiter.api.BeforeEach
+    void clearStores() {
+        projectionOutboxRepository.deleteAll();
+        storeRepository.deleteAll();
+    }
+
     @Test
     void createsStoreForAuthenticatedVendor() throws Exception {
         mockMvc.perform(post("/api/vendors/stores")
@@ -155,9 +161,9 @@ class StoreControllerTest {
 
     @Test
     void returnsPrivacySafePublicStoreSummary() throws Exception {
-        Store store = storeRepository.save(new Store(
-                "vendor-1", "Corner Market", "1 Main St", "New York", 40.7, -74.0
-        ));
+        Store store = new Store("vendor-1", "Corner Market", "1 Main St", "New York", 40.7, -74.0);
+        store.verify(java.time.Instant.now());
+        storeRepository.save(store);
 
         mockMvc.perform(get("/api/vendors/stores/public/" + store.getId()))
                 .andExpect(status().isOk())
@@ -168,6 +174,110 @@ class StoreControllerTest {
                 .andExpect(jsonPath("$.address").doesNotExist())
                 .andExpect(jsonPath("$.latitude").doesNotExist())
                 .andExpect(jsonPath("$.longitude").doesNotExist());
+    }
+
+    @Test
+    void newStoresStartPendingAndAreHiddenFromPublicSummaries() throws Exception {
+        String body = mockMvc.perform(post("/api/vendors/stores")
+                        .header("Authorization", "Bearer " + vendorToken())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"New Market","address":"1 Main St","city":"New York","latitude":40.7,"longitude":-74.0}
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.verificationStatus").value("PENDING"))
+                .andReturn().getResponse().getContentAsString();
+        String storeId = body.replaceAll(".*\"id\":\"([^\"]+)\".*", "$1");
+
+        mockMvc.perform(get("/api/vendors/stores/public/" + storeId))
+                .andExpect(status().isNotFound());
+        mockMvc.perform(get("/api/vendors/stores/public?ids=" + storeId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(0));
+    }
+
+    @Test
+    void adminListsPendingStoresAndVerifiesOne() throws Exception {
+        Store pending = storeRepository.save(new Store(
+                "vendor-1", "Pending Market", "1 Main St", "New York", 40.7, -74.0));
+        long eventsBefore = projectionOutboxRepository.count();
+
+        mockMvc.perform(get("/api/vendors/admin/stores?status=PENDING")
+                        .header("Authorization", "Bearer " + adminToken()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.stores[?(@.id == '" + pending.getId() + "')]").exists());
+
+        mockMvc.perform(post("/api/vendors/admin/stores/" + pending.getId() + "/verify")
+                        .header("Authorization", "Bearer " + adminToken()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.verificationStatus").value("VERIFIED"))
+                .andExpect(jsonPath("$.reviewedAt").isNotEmpty());
+
+        mockMvc.perform(get("/api/vendors/stores/public/" + pending.getId()))
+                .andExpect(status().isOk());
+        org.assertj.core.api.Assertions.assertThat(projectionOutboxRepository.count()).isEqualTo(eventsBefore + 1);
+
+        mockMvc.perform(post("/api/vendors/admin/stores/" + pending.getId() + "/verify")
+                        .header("Authorization", "Bearer " + adminToken()))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.error.code").value("INVALID_STORE_TRANSITION"));
+    }
+
+    @Test
+    void adminRejectsStoreWithReasonAndVendorEditResubmits() throws Exception {
+        Store store = storeRepository.save(new Store(
+                "vendor-1", "Vague Market", "1 Main St", "New York", 40.7, -74.0));
+
+        mockMvc.perform(post("/api/vendors/admin/stores/" + store.getId() + "/reject")
+                        .header("Authorization", "Bearer " + adminToken())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"Address could not be confirmed\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.verificationStatus").value("REJECTED"))
+                .andExpect(jsonPath("$.verificationNote").value("Address could not be confirmed"));
+
+        mockMvc.perform(patch("/api/vendors/stores/" + store.getId())
+                        .header("Authorization", "Bearer " + vendorToken())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"Vague Market","address":"12 Main St","city":"New York","latitude":40.7,"longitude":-74.0}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.verificationStatus").value("PENDING"));
+    }
+
+    @Test
+    void rejectRequiresReason() throws Exception {
+        Store store = storeRepository.save(new Store(
+                "vendor-1", "Market", "1 Main St", "New York", 40.7, -74.0));
+
+        mockMvc.perform(post("/api/vendors/admin/stores/" + store.getId() + "/reject")
+                        .header("Authorization", "Bearer " + adminToken())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"  \"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("VALIDATION_ERROR"));
+    }
+
+    @Test
+    void vendorsCannotUseAdminEndpointsAndAdminsCannotManageStores() throws Exception {
+        mockMvc.perform(get("/api/vendors/admin/stores")
+                        .header("Authorization", "Bearer " + vendorToken()))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/vendors/stores")
+                        .header("Authorization", "Bearer " + adminToken()))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void projectionDetailsReportWhetherStoreIsActive() throws Exception {
+        Store store = storeRepository.save(new Store(
+                "vendor-1", "Pending Market", "1 Main St", "New York", 40.7, -74.0));
+
+        mockMvc.perform(get("/api/vendors/stores/projection/" + store.getId())
+                        .header("X-Projection-Token", "local-development-projection-token"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.storeActive").value(false));
     }
 
     @Test
@@ -199,22 +309,38 @@ class StoreControllerTest {
                 .andExpect(status().isUnauthorized());
     }
 
+    @Test
+    void rejectsExpiredVendorToken() throws Exception {
+        String expired = token("vendor-1", "VENDOR", java.time.Instant.now().minusSeconds(5).getEpochSecond());
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/vendors/stores")
+                        .header("Authorization", "Bearer " + expired))
+                .andExpect(status().isUnauthorized());
+    }
+
+    private String adminToken() throws Exception {
+        return token("admin-1", "ADMIN", java.time.Instant.now().plusSeconds(3600).getEpochSecond());
+    }
+
     private String vendorToken() throws Exception {
         return vendorToken("vendor-1");
     }
 
     private String vendorToken(String vendorId) throws Exception {
+        return token(vendorId, "VENDOR", java.time.Instant.now().plusSeconds(3600).getEpochSecond());
+    }
+
+    static String token(String subject, String role, long expiresAtEpochSecond) throws Exception {
         String header = encode("{\"alg\":\"HS256\",\"typ\":\"JWT\"}");
-        String payload = encode("{\"sub\":\"" + vendorId + "\",\"role\":\"VENDOR\"}");
+        String payload = encode("{\"sub\":\"" + subject + "\",\"role\":\"" + role
+                + "\",\"exp\":" + expiresAtEpochSecond + "}");
         String signingInput = header + "." + payload;
         Mac mac = Mac.getInstance("HmacSHA256");
         mac.init(new SecretKeySpec("test-secret".getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
-        String signature = Base64.getUrlEncoder().withoutPadding()
+        return signingInput + "." + Base64.getUrlEncoder().withoutPadding()
                 .encodeToString(mac.doFinal(signingInput.getBytes(StandardCharsets.UTF_8)));
-        return signingInput + "." + signature;
     }
 
-    private String encode(String value) {
+    static String encode(String value) {
         return Base64.getUrlEncoder().withoutPadding()
                 .encodeToString(value.getBytes(StandardCharsets.UTF_8));
     }

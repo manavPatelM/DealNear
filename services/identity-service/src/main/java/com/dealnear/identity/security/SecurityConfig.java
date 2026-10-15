@@ -32,7 +32,7 @@ public class SecurityConfig {
                         .authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/health", "/api/auth/register", "/api/auth/register/vendor", "/api/auth/login").permitAll()
-                        .requestMatchers("/api/auth/me").hasAnyRole("CUSTOMER", "VENDOR")
+                        .requestMatchers("/api/auth/me").hasAnyRole("CUSTOMER", "VENDOR", "ADMIN")
                         .requestMatchers("/api/auth/saved-offers", "/api/auth/saved-offers/**").hasRole("CUSTOMER")
                         .anyRequest().denyAll())
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
