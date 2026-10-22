@@ -1,0 +1,28 @@
+# Serves the SPA and forwards /api to the gateway so the browser uses a single origin.
+# Rendered by the nginx image's envsubst step from API_UPSTREAM and DNS_RESOLVER:
+#   Docker Compose: http://api-gateway:3000 with Docker DNS 127.0.0.11 (image defaults)
+#   AWS ECS:        http://api-gateway.dealnear.local:3000 with the VPC resolver 169.254.169.253
+# Using a variable makes nginx resolve the name per request, so startup never fails
+# when the gateway is not registered yet.
+server {
+    listen 80;
+    listen [::]:80;
+    server_name _;
+    root /usr/share/nginx/html;
+
+    resolver ${DNS_RESOLVER} valid=10s ipv6=off;
+
+    location /api/ {
+        set $api_upstream ${API_UPSTREAM};
+        proxy_pass $api_upstream;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 15s;
+        client_max_body_size 1m;
+    }
+
+    location / {
+        try_files $uri /index.html;
+    }
+}

@@ -39,3 +39,8 @@ Thumbs.db
 infra/aws/.terraform/
 infra/aws/*.tfstate*
 infra/aws/terraform.tfvars
+infra/aws/tfplan
+infra/aws-ecs/.terraform/
+infra/aws-ecs/*.tfstate*
+infra/aws-ecs/terraform.tfvars
+infra/aws-ecs/tfplan

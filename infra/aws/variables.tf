@@ -46,6 +46,12 @@ variable "admin_email" {
   default     = "admin@dealnear.local"
 }
 
+variable "existing_instance_profile" {
+  description = "Name of an existing EC2 instance profile to use instead of creating one. Set to \"LabInstanceProfile\" in AWS Academy Learner Lab, which does not allow creating IAM roles."
+  type        = string
+  default     = ""
+}
+
 variable "budget_email" {
   description = "Optional email for a monthly cost alert. Empty skips the budget."
   type        = string

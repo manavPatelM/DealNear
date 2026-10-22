@@ -11,3 +11,6 @@ domain_name = ""
 admin_email  = "admin@dealnear.local"
 budget_email = "you@example.com"
 monthly_budget_usd = 50
+
+# AWS Academy Learner Lab: use region "us-east-1" and the lab-provided profile.
+# existing_instance_profile = "LabInstanceProfile"

@@ -148,3 +148,19 @@ if you need the data.
 3. Move secrets to Secrets Manager/SSM Parameter Store.
 4. Run services on ECS Fargate or EKS behind an ALB with ACM certificates; ship logs to CloudWatch.
 5. Move Terraform state to S3 with locking.
+
+## AWS Academy Learner Lab notes
+
+- Region must be `us-east-1` (or `us-west-2`), and IAM roles cannot be created:
+  set `existing_instance_profile = "LabInstanceProfile"` in `terraform.tfvars`.
+- Credentials come from **AWS Details → AWS CLI → Show** and go in
+  `%USERPROFILE%\.aws\credentials`. They expire with each lab session; paste new
+  ones before running Terraform again.
+- When the lab session ends the instance is stopped; starting the lab starts it
+  again, and Docker restarts the stack automatically. The Elastic IP is kept.
+- No domain? Use `<ip-with-dashes>.sslip.io` (for example `54-85-39-197.sslip.io`)
+  as `SITE_ADDRESS` to get a real HTTPS certificate for the IP.
+- Some campus networks block traffic to new cloud IPs. If the site times out on
+  your network, try mobile data before debugging the server.
+- Without the Session Manager console you can run commands on the server from your
+  PC: `aws ssm send-command --instance-ids <id> --document-name AWS-RunShellScript --parameters file://cmd.json`.

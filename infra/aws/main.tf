@@ -6,6 +6,15 @@ data "aws_vpc" "default" {
   default = true
 }
 
+# Not every availability zone offers every instance type (e.g. us-east-1e has no t3).
+data "aws_ec2_instance_type_offerings" "available" {
+  location_type = "availability-zone"
+  filter {
+    name   = "instance-type"
+    values = [var.instance_type]
+  }
+}
+
 data "aws_subnets" "default" {
   filter {
     name   = "vpc-id"
@@ -14,6 +23,10 @@ data "aws_subnets" "default" {
   filter {
     name   = "default-for-az"
     values = ["true"]
+  }
+  filter {
+    name   = "availability-zone"
+    values = data.aws_ec2_instance_type_offerings.available.locations
   }
 }
 
@@ -53,8 +66,13 @@ resource "aws_security_group" "web" {
   }
 }
 
+locals {
+  create_iam = var.existing_instance_profile == ""
+}
+
 resource "aws_iam_role" "instance" {
-  name = "${local.name}-instance"
+  count = local.create_iam ? 1 : 0
+  name  = "${local.name}-instance"
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
@@ -67,13 +85,15 @@ resource "aws_iam_role" "instance" {
 
 # Least privilege: the instance only needs to register with Session Manager.
 resource "aws_iam_role_policy_attachment" "ssm" {
-  role       = aws_iam_role.instance.name
+  count      = local.create_iam ? 1 : 0
+  role       = aws_iam_role.instance[0].name
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
 resource "aws_iam_instance_profile" "instance" {
-  name = "${local.name}-instance"
-  role = aws_iam_role.instance.name
+  count = local.create_iam ? 1 : 0
+  name  = "${local.name}-instance"
+  role  = aws_iam_role.instance[0].name
 }
 
 resource "aws_instance" "app" {
@@ -81,7 +101,7 @@ resource "aws_instance" "app" {
   instance_type          = var.instance_type
   subnet_id              = sort(data.aws_subnets.default.ids)[0]
   vpc_security_group_ids = [aws_security_group.web.id]
-  iam_instance_profile   = aws_iam_instance_profile.instance.name
+  iam_instance_profile   = local.create_iam ? aws_iam_instance_profile.instance[0].name : var.existing_instance_profile
 
   user_data = templatefile("${path.module}/user_data.sh.tftpl", {
     repo_url    = var.repo_url
