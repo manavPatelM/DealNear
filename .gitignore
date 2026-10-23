@@ -44,3 +44,5 @@ infra/aws-ecs/.terraform/
 infra/aws-ecs/*.tfstate*
 infra/aws-ecs/terraform.tfvars
 infra/aws-ecs/tfplan
+frontend/playwright-report/
+frontend/test-results/

@@ -1,30 +1,74 @@
+# Local development stack. Database per service: each microservice has its own
+# PostgreSQL server, database, user and password, and cannot reach another service's data.
+# The passwords below are local-development values only.
+
+# Health checks use TCP (-h 127.0.0.1): during first-time init the image runs a temporary
+# socket-only server, and a socket check would report healthy before the real server starts.
+x-db-healthcheck: &db-healthcheck
+  interval: 5s
+  timeout: 5s
+  retries: 15
+
 services:
-  postgres:
+  identity-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: identity
+      POSTGRES_USER: identity_svc
+      POSTGRES_PASSWORD: local-identity-db-password
+    volumes:
+      - identity-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U identity_svc -d identity"]
+      <<: *db-healthcheck
+
+  vendor-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: vendor
+      POSTGRES_USER: vendor_svc
+      POSTGRES_PASSWORD: local-vendor-db-password
+    volumes:
+      - vendor-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U vendor_svc -d vendor"]
+      <<: *db-healthcheck
+
+  offer-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: offer
+      POSTGRES_USER: offer_svc
+      POSTGRES_PASSWORD: local-offer-db-password
+    volumes:
+      - offer-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U offer_svc -d offer"]
+      <<: *db-healthcheck
+
+  # Only discovery needs PostGIS for geographic queries.
+  discovery-db:
     image: postgis/postgis:16-3.4-alpine
     environment:
-      POSTGRES_DB: dealnear
-      POSTGRES_USER: dealnear
-      POSTGRES_PASSWORD: dealnear
-    ports:
-      - "5432:5432"
+      POSTGRES_DB: discovery
+      POSTGRES_USER: discovery_svc
+      POSTGRES_PASSWORD: local-discovery-db-password
     volumes:
-      - dealnear-postgres-data:/var/lib/postgresql/data
+      - discovery-db-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U dealnear -d dealnear"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U discovery_svc -d discovery"]
+      <<: *db-healthcheck
 
   discovery-service:
     build: ./services/discovery-service
     environment:
-      DATABASE_URL: jdbc:postgresql://postgres:5432/dealnear
-      DATABASE_USERNAME: dealnear
-      DATABASE_PASSWORD: dealnear
+      DATABASE_URL: jdbc:postgresql://discovery-db:5432/discovery
+      DATABASE_USERNAME: discovery_svc
+      DATABASE_PASSWORD: local-discovery-db-password
       DATABASE_SCHEMA: discovery_service
       DISCOVERY_PROJECTION_TOKEN: local-development-projection-token
     depends_on:
-      postgres:
+      discovery-db:
         condition: service_healthy
     ports:
       - "8083:8083"
@@ -38,17 +82,16 @@ services:
   vendor-service:
     build: ./services/vendor-service
     environment:
-      <<: &java-environment
-        DATABASE_URL: jdbc:postgresql://postgres:5432/dealnear
-        DATABASE_USERNAME: dealnear
-        DATABASE_PASSWORD: dealnear
-        JWT_SECRET: local-development-secret-change-me
-        VENDOR_PROJECTION_TOKEN: local-development-projection-token
-        DISCOVERY_SERVICE_URL: http://discovery-service:8083
+      DATABASE_URL: jdbc:postgresql://vendor-db:5432/vendor
+      DATABASE_USERNAME: vendor_svc
+      DATABASE_PASSWORD: local-vendor-db-password
+      JWT_SECRET: local-development-secret-change-me
+      VENDOR_PROJECTION_TOKEN: local-development-projection-token
+      DISCOVERY_SERVICE_URL: http://discovery-service:8083
       # The store projection outbox lives in vendor-service, so its dispatcher runs here.
       STORE_PROJECTION_DISPATCHER_ENABLED: "true"
     depends_on:
-      postgres:
+      vendor-db:
         condition: service_healthy
       discovery-service:
         condition: service_started
@@ -64,14 +107,18 @@ services:
   offer-service:
     build: ./services/offer-service
     environment:
-      <<: *java-environment
+      DATABASE_URL: jdbc:postgresql://offer-db:5432/offer
+      DATABASE_USERNAME: offer_svc
+      DATABASE_PASSWORD: local-offer-db-password
       DATABASE_SCHEMA: offer_service
+      JWT_SECRET: local-development-secret-change-me
       VENDOR_SERVICE_URL: http://vendor-service:8081
       DISCOVERY_SERVICE_URL: http://discovery-service:8083
       PROJECTION_DISPATCHER_ENABLED: "true"
+      VENDOR_PROJECTION_TOKEN: local-development-projection-token
       DISCOVERY_PROJECTION_TOKEN: local-development-projection-token
     depends_on:
-      postgres:
+      offer-db:
         condition: service_healthy
       vendor-service:
         condition: service_healthy
@@ -89,16 +136,16 @@ services:
   identity-service:
     build: ./services/identity-service
     environment:
-      DATABASE_URL: jdbc:postgresql://postgres:5432/dealnear
-      DATABASE_USERNAME: dealnear
-      DATABASE_PASSWORD: dealnear
+      DATABASE_URL: jdbc:postgresql://identity-db:5432/identity
+      DATABASE_USERNAME: identity_svc
+      DATABASE_PASSWORD: local-identity-db-password
       JWT_SECRET: local-development-secret-change-me
       JWT_TTL_SECONDS: "3600"
       # Local-only bootstrap admin for the admin portal. Never reuse these values elsewhere.
       ADMIN_BOOTSTRAP_EMAIL: admin@dealnear.local
       ADMIN_BOOTSTRAP_PASSWORD: local-admin-password
     depends_on:
-      postgres:
+      identity-db:
         condition: service_healthy
     ports:
       - "8084:8084"
@@ -155,4 +202,7 @@ services:
       start_period: 10s
 
 volumes:
-  dealnear-postgres-data:
+  identity-db-data:
+  vendor-db-data:
+  offer-db-data:
+  discovery-db-data:

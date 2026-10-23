@@ -73,3 +73,8 @@ Each result also includes `category`, `startAt`, and `endAt`. Projection
 requests accept optional `category` (stored as `OTHER` when absent) and
 `storeActive` (default `true`). Offers from stores that are not admin-verified
 are kept in the read model but excluded from results.
+
+## Multiple categories (DN-041)
+
+`category` accepts a comma-separated list of up to 20 codes (for example a parent and
+its subcategories: `category=FOOD_AND_DRINK,CAFES`). Results match any listed code.

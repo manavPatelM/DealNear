@@ -29,7 +29,7 @@ public record PublicOfferResponse(
                 offer.getCreatedAt(),
                 offer.getStartAt(),
                 offer.getEndAt(),
-                offer.getCategory().name()
+                offer.getCategory()
         );
     }
 }

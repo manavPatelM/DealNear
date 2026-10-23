@@ -44,7 +44,10 @@ if [ ! -f .env.prod ]; then
   fi
   umask 077
   cat > .env.prod <<EOF
-DATABASE_PASSWORD=$(rand 24)
+IDENTITY_DB_PASSWORD=$(rand 24)
+VENDOR_DB_PASSWORD=$(rand 24)
+OFFER_DB_PASSWORD=$(rand 24)
+DISCOVERY_DB_PASSWORD=$(rand 24)
 JWT_SECRET=$(rand 32)
 PROJECTION_TOKEN=$(rand 24)
 ADMIN_BOOTSTRAP_EMAIL=${admin_email}

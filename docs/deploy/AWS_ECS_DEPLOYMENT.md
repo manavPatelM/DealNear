@@ -11,7 +11,7 @@ Internet ── HTTP ──▶ Public ALB ── /      ──▶ customer-web (
                           Internal ALB (VPC only, one listener per service port)
           :8084 identity-service · :8081 vendor-service · :8082 offer-service · :8083 discovery-service
                                                    │
-                     Amazon RDS PostgreSQL 16 + PostGIS (private; one schema per service)
+      4 × Amazon RDS PostgreSQL 16, one per service (discovery with PostGIS), private
 
 Images: Amazon ECR (6 repos) · Logs: CloudWatch (log group per service)
 Secrets: AWS Secrets Manager (each task receives only the keys it needs)
@@ -24,15 +24,15 @@ Secrets: AWS Secrets Manager (each task receives only the keys it needs)
 | Amazon ECS (Fargate) | Cluster `dealnear-ecs`; 6 services and 6 task definitions; 1 task each |
 | Amazon ECR | `dealnear/{identity-service,vendor-service,offer-service,discovery-service,api-gateway,customer-web}` with scan on push |
 | Elastic Load Balancing | Public ALB (routes `/` and `/api/*`); internal ALB for service-to-service calls; 7 target groups with health checks |
-| Amazon RDS | `dealnear-ecs-postgres`, db.t3.micro, encrypted, not publicly accessible |
-| AWS Secrets Manager | One secret with the DB password, JWT secret, projection token, admin password |
+| Amazon RDS | `dealnear-ecs-{identity,vendor,offer,discovery}-db`: one db.t3.micro per microservice, encrypted, private |
+| AWS Secrets Manager | One secret with a DB password per service, JWT secret, projection token, admin password |
 | Amazon CloudWatch Logs | `/ecs/dealnear-ecs/<service>`, 3-day retention |
 | Amazon VPC | Default VPC, 4 security groups (public ALB, internal ALB, tasks, database) |
 | AWS IAM | Existing `LabRole` as task execution and task role |
 
 Security groups: only the public ALB accepts internet traffic (port 80). Tasks accept
-traffic only from the two load balancers and each other. RDS accepts 5432 only from
-tasks. Tasks have public IPs solely so they can pull from ECR without a NAT gateway;
+traffic only from the two load balancers and each other. Each RDS instance accepts 5432 only from its own service's
+security group (database per service, ADR-035). Tasks have public IPs solely so they can pull from ECR without a NAT gateway;
 inbound access is still blocked by the security group.
 
 ## Learner Lab constraints and the workarounds used
@@ -75,8 +75,8 @@ aws ecs update-service --cluster dealnear-ecs --service offer-service --force-ne
 Only that service restarts; the others keep running.
 
 ## Cost (us-east-1, approximate)
-About US$5 a day: Fargate 6 tasks (~US$3), two ALBs (~US$1.2), RDS db.t3.micro
-(~US$0.45), task public IPv4 (~US$0.7). `terraform destroy` in `infra/aws-ecs`
+About US$6.5 a day: Fargate 6 tasks (~US$3), two ALBs (~US$1.2), 4 × RDS db.t3.micro
+(~US$1.8), task public IPv4 (~US$0.7). `terraform destroy` in `infra/aws-ecs`
 removes everything, including the database and images.
 
 ## Verified 2026-10-22

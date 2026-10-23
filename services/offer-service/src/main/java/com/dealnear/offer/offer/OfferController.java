@@ -1,5 +1,6 @@
 package com.dealnear.offer.offer;
 
+import com.dealnear.offer.category.CategoryService;
 import com.dealnear.offer.ownership.StoreOwnershipVerifier;
 import com.dealnear.offer.ownership.StoreSummary;
 import com.dealnear.offer.ownership.StoreSummaryClient;
@@ -39,13 +40,16 @@ public class OfferController {
     private final StoreOwnershipVerifier storeOwnershipVerifier;
     private final StoreSummaryClient storeSummaryClient;
     private final OfferOutboxService outboxService;
+    private final CategoryService categoryService;
 
     public OfferController(
             OfferRepository offerRepository,
             StoreOwnershipVerifier storeOwnershipVerifier,
             StoreSummaryClient storeSummaryClient,
-            OfferOutboxService outboxService
+            OfferOutboxService outboxService,
+            CategoryService categoryService
     ) {
+        this.categoryService = categoryService;
         this.offerRepository = offerRepository;
         this.storeOwnershipVerifier = storeOwnershipVerifier;
         this.storeSummaryClient = storeSummaryClient;
@@ -66,9 +70,10 @@ public class OfferController {
             throw new StoreOwnershipException();
         }
         validateWindow(request.startAt(), request.endAt());
+        String category = categoryService.requireAssignable(request.category());
         return OfferResponse.from(offerRepository.save(new Offer(
                 authentication.getName(), request.storeId(), request.title(), request.description(),
-                request.startAt(), request.endAt(), request.categoryOrDefault()
+                request.startAt(), request.endAt(), category
         )));
     }
 
@@ -87,7 +92,8 @@ public class OfferController {
             Authentication authentication
     ) {
         Offer offer = owned(offerId, authentication);
-        offer.updateDetails(request.title(), request.description(), request.category());
+        String category = request.category() == null ? null : categoryService.requireAssignable(request.category());
+        offer.updateDetails(request.title(), request.description(), category);
         Offer saved = offerRepository.save(offer);
         if (saved.isPublished()) {
             outboxService.recordProjection(saved);
@@ -184,7 +190,7 @@ public class OfferController {
     public PublicOfferPageResponse listPublished(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
-            @RequestParam(required = false) OfferCategory category,
+            @RequestParam(required = false) String category,
             @RequestParam(required = false) UUID storeId,
             @RequestParam(required = false) List<UUID> ids
     ) {
@@ -196,7 +202,8 @@ public class OfferController {
         Page<Offer> offers = offerRepository.findAll(
                 Specification.allOf(
                         PublicOfferSpecifications.active(),
-                        PublicOfferSpecifications.inCategory(category),
+                        PublicOfferSpecifications.inCategories(
+                                category == null || category.isBlank() ? null : categoryService.expandForFilter(category)),
                         PublicOfferSpecifications.atStore(storeId),
                         PublicOfferSpecifications.withIds(ids)
                 ),

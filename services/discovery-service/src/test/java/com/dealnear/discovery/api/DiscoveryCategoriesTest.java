@@ -31,4 +31,14 @@ class DiscoveryCategoriesTest {
         assertThat(DiscoveryCategories.projected(null)).isEqualTo("OTHER");
         assertThat(DiscoveryCategories.projected("GROCERY")).isEqualTo("GROCERY");
     }
+
+    @Test
+    void parsesCommaSeparatedCategoryLists() {
+        assertThat(DiscoveryCategories.filterList(null)).isEmpty();
+        assertThat(DiscoveryCategories.filterList("food_and_drink, CAFES,cafes,"))
+                .containsExactly("FOOD_AND_DRINK", "CAFES");
+        assertThatThrownBy(() -> DiscoveryCategories.filterList(String.join(",",
+                java.util.stream.IntStream.range(0, 21).mapToObj(i -> "C" + (char) ('A' + i)).toList())))
+                .isInstanceOf(ResponseStatusException.class);
+    }
 }

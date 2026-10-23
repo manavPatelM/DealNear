@@ -49,11 +49,22 @@ class OfferControllerTest {
     private StoreSummaryClient storeSummaryClient;
     @Autowired
     private com.dealnear.offer.moderation.OfferReportRepository reportRepository;
+    @Autowired
+    private com.dealnear.offer.category.CategoryRepository categoryRepository;
 
     @BeforeEach
     void clearOffers() {
         reportRepository.deleteAll();
         offerRepository.deleteAll();
+        categoryRepository.deleteAll();
+        // Tests run on H2 without Flyway, so seed the taxonomy the tests rely on.
+        com.dealnear.offer.category.Category food = categoryRepository.save(
+                new com.dealnear.offer.category.Category("FOOD_AND_DRINK", "food-cafes", "Food & Cafés", null, null, null, 10));
+        categoryRepository.save(new com.dealnear.offer.category.Category("CAFES", "cafes", "Cafés", null, null, food.getId(), 10));
+        for (String code : List.of("GROCERY", "FASHION", "OTHER")) {
+            categoryRepository.save(new com.dealnear.offer.category.Category(
+                    code, code.toLowerCase(), code, null, null, null, 20));
+        }
         offerOutboxRepository.deleteAll();
         when(storeOwnershipVerifier.ownedStoreVerificationStatus(any(UUID.class), anyString()))
                 .thenReturn(java.util.Optional.of("VERIFIED"));
@@ -496,15 +507,15 @@ class OfferControllerTest {
                                 {"storeId":"11111111-1111-1111-1111-111111111111","title":"X","description":"Y","startAt":"2026-10-13T00:00:00Z","endAt":"2030-12-31T23:59:59Z","category":"WEAPONS"}
                                 """))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.error.code").value("INVALID_REQUEST"));
+                .andExpect(jsonPath("$.error.code").value("INVALID_CATEGORY"));
     }
 
     @Test
     void publicListingFiltersByCategoryStoreAndIds() throws Exception {
         UUID storeA = UUID.randomUUID();
-        Offer food = publishedOffer(storeA, OfferCategory.FOOD_AND_DRINK);
-        Offer grocery = publishedOffer(storeA, OfferCategory.GROCERY);
-        Offer elsewhere = publishedOffer(UUID.randomUUID(), OfferCategory.GROCERY);
+        Offer food = publishedOffer(storeA, "FOOD_AND_DRINK");
+        Offer grocery = publishedOffer(storeA, "GROCERY");
+        Offer elsewhere = publishedOffer(UUID.randomUUID(), "GROCERY");
 
         mockMvc.perform(get("/api/offers/public?category=GROCERY"))
                 .andExpect(status().isOk())
@@ -518,14 +529,15 @@ class OfferControllerTest {
                 .andExpect(jsonPath("$.totalElements").value(1))
                 .andExpect(jsonPath("$.offers[0].id").value(grocery.getId().toString()));
         mockMvc.perform(get("/api/offers/public?category=NOPE"))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("INVALID_CATEGORY"));
     }
 
     @Test
     void publicListingHidesOffersWhoseStoreHasNoPublicSummary() throws Exception {
         UUID hiddenStore = UUID.randomUUID();
-        publishedOffer(hiddenStore, OfferCategory.OTHER);
-        publishedOffer(UUID.randomUUID(), OfferCategory.OTHER);
+        publishedOffer(hiddenStore, "OTHER");
+        publishedOffer(UUID.randomUUID(), "OTHER");
         when(storeSummaryClient.findByIds(any(List.class)))
                 .thenAnswer(invocation -> ((List<UUID>) invocation.getArgument(0)).stream()
                         .filter(id -> !id.equals(hiddenStore))
@@ -540,7 +552,7 @@ class OfferControllerTest {
     @Test
     void publishingProjectionEventCarriesCategory() throws Exception {
         Offer offer = offerRepository.save(new Offer("vendor-1", UUID.randomUUID(), "T", "D",
-                Instant.now(), Instant.now().plusSeconds(3600), OfferCategory.FASHION));
+                Instant.now(), Instant.now().plusSeconds(3600), "FASHION"));
 
         mockMvc.perform(post("/api/offers/" + offer.getId() + "/publish")
                         .header("Authorization", "Bearer " + vendorToken()))
@@ -555,7 +567,7 @@ class OfferControllerTest {
 
     @Test
     void pausesAndResumesPublishedOfferWithProjectionEvents() throws Exception {
-        Offer offer = publishedOffer(UUID.randomUUID(), OfferCategory.OTHER);
+        Offer offer = publishedOffer(UUID.randomUUID(), "OTHER");
 
         mockMvc.perform(post("/api/offers/" + offer.getId() + "/pause")
                         .header("Authorization", "Bearer " + vendorToken()))
@@ -589,7 +601,7 @@ class OfferControllerTest {
 
     @Test
     void expiresOfferEarlyAndBlocksFurtherChanges() throws Exception {
-        Offer offer = publishedOffer(UUID.randomUUID(), OfferCategory.OTHER);
+        Offer offer = publishedOffer(UUID.randomUUID(), "OTHER");
 
         mockMvc.perform(post("/api/offers/" + offer.getId() + "/expire")
                         .header("Authorization", "Bearer " + vendorToken()))
@@ -633,7 +645,7 @@ class OfferControllerTest {
 
     @Test
     void customerReportsLiveOfferOnceAndAdminSeesItInQueue() throws Exception {
-        Offer offer = publishedOffer(UUID.randomUUID(), OfferCategory.OTHER);
+        Offer offer = publishedOffer(UUID.randomUUID(), "OTHER");
         String report = "{\"reason\":\"MISLEADING\",\"details\":\"Price is wrong\"}";
 
         mockMvc.perform(post("/api/offers/" + offer.getId() + "/reports")
@@ -670,7 +682,7 @@ class OfferControllerTest {
 
     @Test
     void adminRemovesReportedOfferAndClosesOpenReports() throws Exception {
-        Offer offer = publishedOffer(UUID.randomUUID(), OfferCategory.OTHER);
+        Offer offer = publishedOffer(UUID.randomUUID(), "OTHER");
         mockMvc.perform(post("/api/offers/" + offer.getId() + "/reports")
                 .header("Authorization", "Bearer " + customerToken())
                 .contentType(MediaType.APPLICATION_JSON).content("{\"reason\":\"INAPPROPRIATE\"}"));
@@ -697,7 +709,7 @@ class OfferControllerTest {
 
     @Test
     void adminDismissesReportOnce() throws Exception {
-        Offer offer = publishedOffer(UUID.randomUUID(), OfferCategory.OTHER);
+        Offer offer = publishedOffer(UUID.randomUUID(), "OTHER");
         String body = mockMvc.perform(post("/api/offers/" + offer.getId() + "/reports")
                         .header("Authorization", "Bearer " + customerToken())
                         .contentType(MediaType.APPLICATION_JSON).content("{\"reason\":\"OTHER\"}"))
@@ -725,7 +737,110 @@ class OfferControllerTest {
                 .andExpect(status().isForbidden());
     }
 
-    private Offer publishedOffer(UUID storeId, OfferCategory category) {
+    // ── DN-041 category taxonomy ───────────────────────────────────────
+
+    @Test
+    void publicCategoryListShowsEnabledCategoriesWithParents() throws Exception {
+        mockMvc.perform(get("/api/categories"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.categories[?(@.code == 'CAFES')].parentCode").value("FOOD_AND_DRINK"))
+                .andExpect(jsonPath("$.categories[?(@.code == 'FOOD_AND_DRINK')].slug").value("food-cafes"));
+    }
+
+    @Test
+    void parentCategoryFilterIncludesSubcategoryOffers() throws Exception {
+        publishedOffer(UUID.randomUUID(), "CAFES");
+        publishedOffer(UUID.randomUUID(), "FOOD_AND_DRINK");
+        publishedOffer(UUID.randomUUID(), "GROCERY");
+
+        mockMvc.perform(get("/api/offers/public?category=FOOD_AND_DRINK"))
+                .andExpect(jsonPath("$.totalElements").value(2));
+        mockMvc.perform(get("/api/offers/public?category=cafes"))
+                .andExpect(jsonPath("$.totalElements").value(1));
+    }
+
+    @Test
+    void adminCreatesEditsAndDisablesCategory() throws Exception {
+        String body = mockMvc.perform(post("/api/categories")
+                        .header("Authorization", "Bearer " + adminToken())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"code":"pet_care","slug":"pet-care","name":"Pet Care","icon":"🐾","sortOrder":5,"parentCode":""}
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.code").value("PET_CARE"))
+                .andReturn().getResponse().getContentAsString();
+        String id = body.replaceAll(".*\"id\":\"([^\"]+)\".*", "$1");
+
+        mockMvc.perform(patch("/api/categories/" + id)
+                        .header("Authorization", "Bearer " + adminToken())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"Pets\",\"enabled\":false}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("Pets"))
+                .andExpect(jsonPath("$.enabled").value(false));
+
+        mockMvc.perform(get("/api/categories"))
+                .andExpect(jsonPath("$.categories[?(@.code == 'PET_CARE')]").isEmpty());
+        mockMvc.perform(get("/api/categories/admin").header("Authorization", "Bearer " + adminToken()))
+                .andExpect(jsonPath("$.categories[?(@.code == 'PET_CARE')].enabled").value(false));
+    }
+
+    @Test
+    void vendorsCannotAssignDisabledCategories() throws Exception {
+        com.dealnear.offer.category.Category retired = categoryRepository.save(
+                new com.dealnear.offer.category.Category("RETIRED", "retired", "Retired", null, null, null, 1));
+        mockMvc.perform(patch("/api/categories/" + retired.getId())
+                .header("Authorization", "Bearer " + adminToken())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"enabled\":false}"));
+        when(storeOwnershipVerifier.vendorOwnsStore(any(UUID.class), anyString())).thenReturn(true);
+
+        mockMvc.perform(post("/api/offers")
+                        .header("Authorization", "Bearer " + vendorToken())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"storeId":"11111111-1111-1111-1111-111111111111","title":"X","description":"Y","startAt":"2026-10-13T00:00:00Z","endAt":"2030-12-31T23:59:59Z","category":"RETIRED"}
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("INVALID_CATEGORY"));
+    }
+
+    @Test
+    void rejectsDuplicateCategoriesAndDeepNesting() throws Exception {
+        mockMvc.perform(post("/api/categories")
+                        .header("Authorization", "Bearer " + adminToken())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"code\":\"GROCERY\",\"slug\":\"grocery-2\",\"name\":\"Dup\"}"))
+                .andExpect(status().isConflict());
+        mockMvc.perform(post("/api/categories")
+                        .header("Authorization", "Bearer " + adminToken())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"code\":\"ESPRESSO\",\"slug\":\"espresso\",\"name\":\"Espresso\",\"parentCode\":\"CAFES\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("INVALID_CATEGORY"));
+        mockMvc.perform(post("/api/categories")
+                        .header("Authorization", "Bearer " + adminToken())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"code\":\"BAD\",\"slug\":\"Not A Slug\",\"name\":\"Bad\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("VALIDATION_ERROR"));
+    }
+
+    @Test
+    void onlyAdminsManageCategories() throws Exception {
+        mockMvc.perform(post("/api/categories")
+                        .header("Authorization", "Bearer " + vendorToken())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"code\":\"X_Y\",\"slug\":\"x-y\",\"name\":\"X\"}"))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/categories")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"code\":\"X_Y\",\"slug\":\"x-y\",\"name\":\"X\"}"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    private Offer publishedOffer(UUID storeId, String category) {
         Offer offer = new Offer("vendor-1", storeId, "Offer " + category, "Description",
                 Instant.now().minusSeconds(60), Instant.now().plusSeconds(3600), category);
         offer.publish();

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { request } from './api.js';
+import { Link } from 'react-router-dom';
 
 /* ─── Shared UI ──────────────────────────────────────────── */
 export function Spinner() { return <div className="spinner" aria-hidden="true" />; }
@@ -20,6 +20,8 @@ const statusMeta = {
   OPEN: ['badge-paused', 'Open'],
   DISMISSED: ['badge-draft', 'Dismissed'],
   ACTIONED: ['badge-removed', 'Actioned'],
+  ENABLED: ['badge-published', 'Enabled'],
+  DISABLED: ['badge-expired', 'Disabled'],
 };
 export function StatusBadge({ status }) {
   const [cls, label] = statusMeta[status] ?? ['badge-draft', status];
@@ -46,7 +48,7 @@ export function Modal({ title, onClose, children }) {
   );
 }
 
-/** Prompts for a required free-text reason (store rejection, offer takedown, report details). */
+/** Prompts for a required free-text reason (store rejection, offer takedown). */
 export function ReasonForm({ label, submitLabel, required = true, onSubmit, onCancel, loading, idPrefix }) {
   const [reason, setReason] = useState('');
   return (
@@ -65,64 +67,58 @@ export function ReasonForm({ label, submitLabel, required = true, onSubmit, onCa
   );
 }
 
-/**
- * Sign-in/registration card shared by every portal. `registerPath` is omitted for admins,
- * who cannot self-register; `expectedRole` stops users signing in to the wrong portal.
- */
-export function AuthForm({ idPrefix, expectedRole, registerPath, copy, onAuth }) {
-  const [mode, setMode] = useState('login');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [notice, setNotice] = useState(null);
-
-  async function submit(e) {
-    e.preventDefault();
-    setLoading(true); setNotice(null);
-    try {
-      const path = mode === 'login' ? '/api/auth/login' : registerPath;
-      const result = await request(path, { method: 'POST', body: JSON.stringify({ email, password }) });
-      if (result.role !== expectedRole) {
-        setNotice({ type: 'error', text: copy.wrongRole });
-        return;
-      }
-      onAuth(result.accessToken);
-    } catch (err) {
-      setNotice({ type: 'error', text: err.message });
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  const registering = mode === 'register';
+export function EmptyState({ icon, title, children, action }) {
   return (
-    <div className="card card-padded auth-card">
-      <h2 style={{ marginBottom: '4px' }}>{registering ? copy.registerTitle : copy.loginTitle}</h2>
-      <p className="muted-copy">{registering ? copy.registerSubtitle : copy.loginSubtitle}</p>
-      {notice && <Notice type={notice.type}>{notice.text}</Notice>}
-      <form className="form-grid" onSubmit={submit}>
-        <div className="field">
-          <label htmlFor={`${idPrefix}-email`}>Email address</label>
-          <input id={`${idPrefix}-email`} type="email" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="you@example.com" />
-        </div>
-        <div className="field">
-          <label htmlFor={`${idPrefix}-pass`}>Password</label>
-          <input id={`${idPrefix}-pass`} type="password" minLength="8" value={password} onChange={(e) => setPassword(e.target.value)} required placeholder="Min. 8 characters" />
-        </div>
-        <button className="btn btn-primary btn-block btn-lg" disabled={loading} type="submit" id={`${idPrefix}-submit`}>
-          {loading ? <Spinner /> : null}
-          {registering ? copy.registerTitle : 'Sign in'}
-        </button>
-      </form>
-      {registerPath && (
-        <div className="auth-toggle">
-          {registering ? 'Already have an account?' : copy.registerPrompt}
-          <button className="btn-ghost btn inline-link" onClick={() => setMode(registering ? 'login' : 'register')}>
-            {registering ? 'Sign in' : 'Register'}
-          </button>
-        </div>
-      )}
+    <div className="empty-state">
+      {icon && <span className="empty-icon" aria-hidden="true">{icon}</span>}
+      {title && <h3>{title}</h3>}
+      {children && <p>{children}</p>}
+      {action}
     </div>
   );
 }
 
+export function SkeletonCards({ count = 3 }) {
+  return (
+    <div className="offer-grid" aria-hidden="true">
+      {Array.from({ length: count }, (_, i) => <div key={i} className="offer-card skeleton-card"><div className="skeleton" /></div>)}
+    </div>
+  );
+}
+
+export function PageHeading({ eyebrow, title, children }) {
+  return (
+    <header className="page-heading">
+      {eyebrow && <span className="eyebrow">{eyebrow}</span>}
+      <h1>{title}</h1>
+      {children && <p className="page-lead">{children}</p>}
+    </header>
+  );
+}
+
+export function NotFound({ title = 'Page not found', message = "The page you're looking for doesn't exist or has moved." }) {
+  return (
+    <div className="page page-narrow system-page">
+      <span className="system-code">404</span>
+      <h1>{title}</h1>
+      <p className="page-lead">{message}</p>
+      <div className="form-actions" style={{ justifyContent: 'center' }}>
+        <Link className="btn btn-primary" to="/">Go home</Link>
+        <Link className="btn btn-secondary" to="/explore">Explore offers</Link>
+      </div>
+    </div>
+  );
+}
+
+export function Forbidden({ needed }) {
+  return (
+    <div className="page page-narrow system-page">
+      <span className="system-code">403</span>
+      <h1>Access denied</h1>
+      <p className="page-lead">This area is for {needed} accounts. Sign in with the right account, or head back home.</p>
+      <div className="form-actions" style={{ justifyContent: 'center' }}>
+        <Link className="btn btn-primary" to="/">Go home</Link>
+      </div>
+    </div>
+  );
+}

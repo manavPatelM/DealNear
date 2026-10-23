@@ -12,6 +12,7 @@ import com.dealnear.offer.offer.StoreOwnershipException;
 import com.dealnear.offer.offer.InvalidPaginationException;
 import com.dealnear.offer.offer.OfferNotFoundException;
 import com.dealnear.offer.ownership.StoreSummaryUnavailableException;
+import com.dealnear.offer.category.CategoryExceptions;
 import com.dealnear.offer.offer.InvalidOfferValidityException;
 import com.dealnear.offer.offer.InvalidOfferTransitionException;
 import com.dealnear.offer.offer.StoreNotVerifiedException;
@@ -100,6 +101,27 @@ public class ApiExceptionHandler {
     ResponseEntity<Map<String, Object>> accessDenied() {
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error",
                 Map.of("code", "FORBIDDEN", "message", "Access forbidden")));
+    }
+
+    @ExceptionHandler(CategoryExceptions.InvalidCategoryException.class)
+    ResponseEntity<Map<String, Object>> invalidCategory(RuntimeException exception) {
+        return ResponseEntity.badRequest().body(Map.of("error",
+                Map.of("code", "INVALID_CATEGORY", "message", exception.getMessage())));
+    }
+
+    @ExceptionHandler(CategoryExceptions.CategoryNotFoundException.class)
+    ResponseEntity<Map<String, Object>> categoryNotFound() {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error",
+                Map.of("code", "CATEGORY_NOT_FOUND", "message", "Category not found")));
+    }
+
+    @ExceptionHandler({CategoryExceptions.CategoryConflictException.class,
+            org.springframework.dao.DataIntegrityViolationException.class})
+    ResponseEntity<Map<String, Object>> categoryConflict(RuntimeException exception) {
+        String message = exception instanceof CategoryExceptions.CategoryConflictException
+                ? exception.getMessage() : "The request conflicts with existing data";
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error",
+                Map.of("code", "CONFLICT", "message", message)));
     }
 
     @ExceptionHandler(Exception.class)

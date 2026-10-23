@@ -193,3 +193,10 @@ out of `offers`; `totalElements` may still count them.
   sets `REMOVED`, removes the offer from discovery, and marks open reports `ACTIONED`.
 
 Resolving a report twice returns `409 REPORT_ALREADY_RESOLVED`.
+
+## Category taxonomy (DN-041)
+
+Categories are now admin-managed data (`GET /api/categories`), replacing the fixed list
+above. Offers still store the category `code`. A code must exist and be enabled to be
+assigned (`400 INVALID_CATEGORY` otherwise). `GET /api/offers/public?category=CODE`
+includes the category's subcategories. Full contract: `tasks/DN-041-category-taxonomy.md`.

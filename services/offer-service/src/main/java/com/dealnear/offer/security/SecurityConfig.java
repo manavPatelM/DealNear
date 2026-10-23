@@ -27,6 +27,8 @@ public class SecurityConfig {
                 .exceptionHandling(ex -> ex.authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/health", "/api/offers/public/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/categories").permitAll()
+                        .requestMatchers("/api/categories", "/api/categories/**").hasRole("ADMIN")
                         .requestMatchers("/api/offers/admin/**").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.POST, "/api/offers/*/reports").hasRole("CUSTOMER")
                         // Everything else is the vendor's own offer management (also enforced per method).

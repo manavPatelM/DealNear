@@ -7,16 +7,27 @@ x-jvm: &jvm
   JAVA_TOOL_OPTIONS: "-Xms128m -Xmx320m -XX:+UseSerialGC"
 
 services:
-  postgres:
+  identity-db:
     environment:
-      POSTGRES_PASSWORD: ${DATABASE_PASSWORD:?set DATABASE_PASSWORD in .env.prod}
-    ports: !reset []
+      POSTGRES_PASSWORD: ${IDENTITY_DB_PASSWORD:?set IDENTITY_DB_PASSWORD in .env.prod}
+    restart: unless-stopped
+  vendor-db:
+    environment:
+      POSTGRES_PASSWORD: ${VENDOR_DB_PASSWORD:?set VENDOR_DB_PASSWORD in .env.prod}
+    restart: unless-stopped
+  offer-db:
+    environment:
+      POSTGRES_PASSWORD: ${OFFER_DB_PASSWORD:?set OFFER_DB_PASSWORD in .env.prod}
+    restart: unless-stopped
+  discovery-db:
+    environment:
+      POSTGRES_PASSWORD: ${DISCOVERY_DB_PASSWORD:?set DISCOVERY_DB_PASSWORD in .env.prod}
     restart: unless-stopped
 
   discovery-service:
     environment:
       <<: *jvm
-      DATABASE_PASSWORD: ${DATABASE_PASSWORD}
+      DATABASE_PASSWORD: ${DISCOVERY_DB_PASSWORD}
       DISCOVERY_PROJECTION_TOKEN: ${PROJECTION_TOKEN:?set PROJECTION_TOKEN in .env.prod}
     ports: !reset []
     restart: unless-stopped
@@ -24,7 +35,7 @@ services:
   vendor-service:
     environment:
       <<: *jvm
-      DATABASE_PASSWORD: ${DATABASE_PASSWORD}
+      DATABASE_PASSWORD: ${VENDOR_DB_PASSWORD}
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env.prod}
       VENDOR_PROJECTION_TOKEN: ${PROJECTION_TOKEN}
     ports: !reset []
@@ -33,7 +44,7 @@ services:
   offer-service:
     environment:
       <<: *jvm
-      DATABASE_PASSWORD: ${DATABASE_PASSWORD}
+      DATABASE_PASSWORD: ${OFFER_DB_PASSWORD}
       JWT_SECRET: ${JWT_SECRET}
       VENDOR_PROJECTION_TOKEN: ${PROJECTION_TOKEN}
       DISCOVERY_PROJECTION_TOKEN: ${PROJECTION_TOKEN}
@@ -43,7 +54,7 @@ services:
   identity-service:
     environment:
       <<: *jvm
-      DATABASE_PASSWORD: ${DATABASE_PASSWORD}
+      DATABASE_PASSWORD: ${IDENTITY_DB_PASSWORD}
       JWT_SECRET: ${JWT_SECRET}
       ADMIN_BOOTSTRAP_EMAIL: ${ADMIN_BOOTSTRAP_EMAIL:?set ADMIN_BOOTSTRAP_EMAIL in .env.prod}
       ADMIN_BOOTSTRAP_PASSWORD: ${ADMIN_BOOTSTRAP_PASSWORD:?set ADMIN_BOOTSTRAP_PASSWORD in .env.prod}

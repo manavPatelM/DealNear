@@ -10,9 +10,21 @@ resource "aws_ecr_repository" "service" {
   }
 }
 
+# Database per service: each microservice gets its own RDS instance, database, user and
+# password. Only discovery uses PostGIS (enabled by its own Flyway migration).
+locals {
+  databases = {
+    identity-service  = { db = "identity", user = "identity_svc", secret_key = "IDENTITY_DB_PASSWORD" }
+    vendor-service    = { db = "vendor", user = "vendor_svc", secret_key = "VENDOR_DB_PASSWORD" }
+    offer-service     = { db = "offer", user = "offer_svc", secret_key = "OFFER_DB_PASSWORD" }
+    discovery-service = { db = "discovery", user = "discovery_svc", secret_key = "DISCOVERY_DB_PASSWORD" }
+  }
+}
+
 resource "random_password" "db" {
-  length  = 32
-  special = false
+  for_each = local.databases
+  length   = 32
+  special  = false
 }
 
 resource "random_password" "jwt" {
@@ -39,12 +51,14 @@ resource "aws_secretsmanager_secret" "app" {
 
 resource "aws_secretsmanager_secret_version" "app" {
   secret_id = aws_secretsmanager_secret.app.id
-  secret_string = jsonencode({
-    DATABASE_PASSWORD        = random_password.db.result
-    JWT_SECRET               = random_password.jwt.result
-    PROJECTION_TOKEN         = random_password.projection.result
-    ADMIN_BOOTSTRAP_PASSWORD = random_password.admin.result
-  })
+  secret_string = jsonencode(merge(
+    { for svc, d in local.databases : d.secret_key => random_password.db[svc].result },
+    {
+      JWT_SECRET               = random_password.jwt.result
+      PROJECTION_TOKEN         = random_password.projection.result
+      ADMIN_BOOTSTRAP_PASSWORD = random_password.admin.result
+    }
+  ))
 }
 
 resource "aws_db_subnet_group" "db" {
@@ -52,27 +66,27 @@ resource "aws_db_subnet_group" "db" {
   subnet_ids = data.aws_subnets.default.ids
 }
 
-# One PostgreSQL instance; each service owns its own schema and Flyway history and never
-# touches another service's tables. discovery-service enables PostGIS through its migration.
-resource "aws_db_instance" "postgres" {
-  identifier              = "${local.name}-postgres"
+resource "aws_db_instance" "service" {
+  for_each                = local.databases
+  identifier              = "${local.name}-${each.value.db}-db"
   engine                  = "postgres"
   engine_version          = "16"
   instance_class          = var.db_instance_class
   allocated_storage       = 20
   storage_type            = "gp3"
   storage_encrypted       = true
-  db_name                 = "dealnear"
-  username                = "dealnear"
-  password                = random_password.db.result
+  db_name                 = each.value.db
+  username                = each.value.user
+  password                = random_password.db[each.key].result
   db_subnet_group_name    = aws_db_subnet_group.db.name
-  vpc_security_group_ids  = [aws_security_group.db.id]
+  vpc_security_group_ids  = [aws_security_group.db[each.key].id]
   publicly_accessible     = false
   multi_az                = false
   backup_retention_period = 1
   skip_final_snapshot     = true
   deletion_protection     = false
   apply_immediately       = true
+  tags                    = { Service = each.key }
 }
 
 resource "aws_cloudwatch_log_group" "service" {

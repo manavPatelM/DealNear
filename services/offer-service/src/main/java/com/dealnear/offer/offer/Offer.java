@@ -38,9 +38,9 @@ public class Offer {
     private Instant startAt;
     @Column(name = "end_at", nullable = false)
     private Instant endAt;
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    private OfferCategory category;
+    /** Code of an admin-managed category (see the categories table). */
+    @Column(nullable = false, length = 32)
+    private String category;
     @Column(name = "moderation_note", length = 500)
     private String moderationNote;
 
@@ -59,7 +59,7 @@ public class Offer {
             Instant startAt,
             Instant endAt
     ) {
-        this(vendorId, storeId, title, description, startAt, endAt, OfferCategory.OTHER);
+        this(vendorId, storeId, title, description, startAt, endAt, "OTHER");
     }
 
     public Offer(
@@ -69,7 +69,7 @@ public class Offer {
             String description,
             Instant startAt,
             Instant endAt,
-            OfferCategory category
+            String category
     ) {
         this.id = UUID.randomUUID();
         this.vendorId = vendorId;
@@ -92,7 +92,7 @@ public class Offer {
     public Instant getCreatedAt() { return createdAt; }
     public Instant getStartAt() { return startAt; }
     public Instant getEndAt() { return endAt; }
-    public OfferCategory getCategory() { return category; }
+    public String getCategory() { return category; }
     public String getModerationNote() { return moderationNote; }
     public boolean isPublished() { return status == Status.PUBLISHED; }
 
@@ -106,7 +106,7 @@ public class Offer {
         this.description = description;
     }
 
-    void updateDetails(String title, String description, OfferCategory category) {
+    void updateDetails(String title, String description, String category) {
         if (status == Status.EXPIRED || status == Status.REMOVED) {
             throw new InvalidOfferTransitionException("Expired or removed offers cannot be edited");
         }

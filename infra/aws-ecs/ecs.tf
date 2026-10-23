@@ -5,7 +5,7 @@ data "aws_iam_role" "task" {
 locals {
   service_names = ["identity-service", "vendor-service", "offer-service", "discovery-service", "api-gateway", "customer-web"]
   internal_url  = "http://${aws_lb.internal.dns_name}"
-  db_url        = "jdbc:postgresql://${aws_db_instance.postgres.address}:5432/dealnear?sslmode=require"
+  db_url        = { for svc, d in local.databases : svc => "jdbc:postgresql://${aws_db_instance.service[svc].address}:5432/${d.db}?sslmode=require" }
   secret        = aws_secretsmanager_secret.app.arn
   java_opts     = "-XX:MaxRAMPercentage=70 -XX:+UseSerialGC"
 
@@ -17,41 +17,41 @@ locals {
       port   = 8084, cpu = 512, memory = 1024, public = false, internal = true
       health = "curl -fsS http://localhost:8084/health || exit 1"
       env = {
-        DATABASE_URL    = local.db_url, DATABASE_USERNAME = "dealnear", DATABASE_SCHEMA = "identity_service"
+        DATABASE_URL    = local.db_url["identity-service"], DATABASE_USERNAME = "identity_svc", DATABASE_SCHEMA = "identity_service"
         JWT_TTL_SECONDS = "3600", ADMIN_BOOTSTRAP_EMAIL = var.admin_email, JAVA_TOOL_OPTIONS = local.java_opts
       }
-      secrets = ["DATABASE_PASSWORD", "JWT_SECRET", "ADMIN_BOOTSTRAP_PASSWORD"]
+      secrets = ["DATABASE_PASSWORD=IDENTITY_DB_PASSWORD", "JWT_SECRET", "ADMIN_BOOTSTRAP_PASSWORD"]
     }
     vendor-service = {
       port   = 8081, cpu = 512, memory = 1024, public = false, internal = true
       health = "curl -fsS http://localhost:8081/health || exit 1"
       env = {
-        DATABASE_URL                        = local.db_url, DATABASE_USERNAME = "dealnear"
+        DATABASE_URL                        = local.db_url["vendor-service"], DATABASE_USERNAME = "vendor_svc"
         DISCOVERY_SERVICE_URL               = "${local.internal_url}:8083"
         STORE_PROJECTION_DISPATCHER_ENABLED = "true", JAVA_TOOL_OPTIONS = local.java_opts
       }
-      secrets = ["DATABASE_PASSWORD", "JWT_SECRET", "VENDOR_PROJECTION_TOKEN=PROJECTION_TOKEN"]
+      secrets = ["DATABASE_PASSWORD=VENDOR_DB_PASSWORD", "JWT_SECRET", "VENDOR_PROJECTION_TOKEN=PROJECTION_TOKEN"]
     }
     offer-service = {
       port   = 8082, cpu = 512, memory = 1024, public = false, internal = true
       health = "curl -fsS http://localhost:8082/health || exit 1"
       env = {
-        DATABASE_URL                  = local.db_url, DATABASE_USERNAME = "dealnear", DATABASE_SCHEMA = "offer_service"
+        DATABASE_URL                  = local.db_url["offer-service"], DATABASE_USERNAME = "offer_svc", DATABASE_SCHEMA = "offer_service"
         VENDOR_SERVICE_URL            = "${local.internal_url}:8081"
         DISCOVERY_SERVICE_URL         = "${local.internal_url}:8083"
         PROJECTION_DISPATCHER_ENABLED = "true", JAVA_TOOL_OPTIONS = local.java_opts
       }
-      secrets = ["DATABASE_PASSWORD", "JWT_SECRET", "VENDOR_PROJECTION_TOKEN=PROJECTION_TOKEN",
+      secrets = ["DATABASE_PASSWORD=OFFER_DB_PASSWORD", "JWT_SECRET", "VENDOR_PROJECTION_TOKEN=PROJECTION_TOKEN",
       "DISCOVERY_PROJECTION_TOKEN=PROJECTION_TOKEN"]
     }
     discovery-service = {
       port   = 8083, cpu = 512, memory = 1024, public = false, internal = true
       health = "curl -fsS http://localhost:8083/health || exit 1"
       env = {
-        DATABASE_URL      = local.db_url, DATABASE_USERNAME = "dealnear", DATABASE_SCHEMA = "discovery_service"
+        DATABASE_URL      = local.db_url["discovery-service"], DATABASE_USERNAME = "discovery_svc", DATABASE_SCHEMA = "discovery_service"
         JAVA_TOOL_OPTIONS = local.java_opts
       }
-      secrets = ["DATABASE_PASSWORD", "DISCOVERY_PROJECTION_TOKEN=PROJECTION_TOKEN"]
+      secrets = ["DATABASE_PASSWORD=DISCOVERY_DB_PASSWORD", "DISCOVERY_PROJECTION_TOKEN=PROJECTION_TOKEN"]
     }
     api-gateway = {
       port   = 3000, cpu = 256, memory = 512, public = true, internal = true
@@ -154,7 +154,7 @@ resource "aws_ecs_service" "service" {
 
   network_configuration {
     subnets          = data.aws_subnets.default.ids
-    security_groups  = [aws_security_group.services.id]
+    security_groups  = [aws_security_group.services.id, aws_security_group.task[each.key].id]
     assign_public_ip = true
   }
 

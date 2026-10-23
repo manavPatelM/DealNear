@@ -17,8 +17,9 @@ output "ecs_cluster" {
   value = aws_ecs_cluster.main.name
 }
 
-output "rds_endpoint" {
-  value = aws_db_instance.postgres.address
+output "rds_endpoints" {
+  description = "One private PostgreSQL instance per microservice."
+  value       = { for svc, db in aws_db_instance.service : svc => db.address }
 }
 
 output "secret_arn" {

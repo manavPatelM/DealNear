@@ -18,8 +18,8 @@ final class PublicOfferSpecifications {
         );
     }
 
-    static Specification<Offer> inCategory(OfferCategory category) {
-        return category == null ? null : (root, query, cb) -> cb.equal(root.get("category"), category);
+    static Specification<Offer> inCategories(Collection<String> codes) {
+        return codes == null || codes.isEmpty() ? null : (root, query, cb) -> root.get("category").in(codes);
     }
 
     static Specification<Offer> atStore(UUID storeId) {

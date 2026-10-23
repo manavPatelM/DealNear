@@ -28,6 +28,25 @@ final class DiscoveryCategories {
         return normalized;
     }
 
+    /**
+     * Parses a comma-separated filter such as {@code FOOD_AND_DRINK,CAFES} (a parent category plus
+     * its subcategories). Returns an empty list when there is no filter; at most 20 codes.
+     */
+    static java.util.List<String> filterList(String categories) {
+        if (categories == null || categories.isBlank()) {
+            return java.util.List.of();
+        }
+        java.util.List<String> codes = java.util.Arrays.stream(categories.split(","))
+                .map(DiscoveryCategories::filter)
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .toList();
+        if (codes.size() > 20) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Too many categories");
+        }
+        return codes;
+    }
+
     /** Projection events recorded before categories existed carry none; they are stored as OTHER. */
     static String projected(String category) {
         String normalized = filter(category);

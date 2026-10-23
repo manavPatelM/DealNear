@@ -44,7 +44,8 @@ function routeFor(pathname) {
   if (pathname.startsWith('/api/vendors/')) {
     return 'vendor';
   }
-  if (pathname.startsWith('/api/offers')) {
+  if (pathname.startsWith('/api/offers') || pathname === '/api/categories'
+    || pathname.startsWith('/api/categories/')) {
     return 'offer';
   }
   if (pathname.startsWith('/api/discovery/')) {

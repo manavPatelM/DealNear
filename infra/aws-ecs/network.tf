@@ -75,16 +75,26 @@ resource "aws_security_group" "services" {
   }
 }
 
+# Identity-only security group per service, so a database can admit exactly one service.
+resource "aws_security_group" "task" {
+  for_each    = toset(local.service_names)
+  name        = "${local.name}-${each.key}"
+  description = "Identifies ${each.key} tasks (no rules of its own)"
+  vpc_id      = data.aws_vpc.default.id
+}
+
+# One database security group per service: PostgreSQL only from that service's tasks.
 resource "aws_security_group" "db" {
-  name        = "${local.name}-db"
-  description = "DealNear PostgreSQL"
+  for_each    = local.databases
+  name        = "${local.name}-${each.value.db}-db"
+  description = "${each.value.db} database: reachable only from ${each.key}"
   vpc_id      = data.aws_vpc.default.id
 
   ingress {
-    description     = "PostgreSQL from ECS tasks only"
+    description     = "PostgreSQL from ${each.key} only"
     from_port       = 5432
     to_port         = 5432
     protocol        = "tcp"
-    security_groups = [aws_security_group.services.id]
+    security_groups = [aws_security_group.task[each.key].id]
   }
 }

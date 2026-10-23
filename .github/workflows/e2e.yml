@@ -1,0 +1,63 @@
+name: End-to-end
+
+# Starts the full Docker Compose stack and runs the browser journeys (Playwright) and the
+# API smoke test against it. Slower than unit CI, so it runs on pull requests and on demand.
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    name: e2e / compose stack
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Start stack
+        run: docker compose up --build --detach --wait --wait-timeout 600
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install browser test dependencies
+        working-directory: frontend
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: API smoke test
+        run: node scripts/smoke-test.mjs
+        env:
+          BASE_URL: http://localhost:5173
+          PROJECTION_WAIT_MS: "60000"
+
+      - name: Browser tests
+        working-directory: frontend
+        run: npx playwright test
+        env:
+          E2E_BASE_URL: http://localhost:5173
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: frontend/playwright-report
+          retention-days: 7
+
+      - name: Service logs on failure
+        if: failure()
+        run: docker compose logs --tail=200
+
+      - name: Stop stack
+        if: always()
+        run: docker compose down --volumes

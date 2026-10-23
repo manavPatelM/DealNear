@@ -4,6 +4,7 @@ import jakarta.validation.Valid;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import org.springframework.beans.factory.annotation.Value;
@@ -110,20 +111,19 @@ public class DiscoveryController {
         if (page < 0 || size < 1 || size > 50) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid pagination");
         }
-        String categoryFilter = DiscoveryCategories.filter(category);
+        List<String> categoryFilter = DiscoveryCategories.filterList(category);
         long offset = (long) page * size;
         double radiusMeters = radiusKm * 1000;
 
-        // Only a fixed SQL fragment is appended; the category value itself is always bound.
+        // Only "?" placeholders are appended to the SQL; category values are always bound parameters.
         String eligibility = """
                 WHERE start_at <= CURRENT_TIMESTAMP AND end_at > CURRENT_TIMESTAMP
                   AND store_active
                   AND ST_DWithin(location, ST_SetSRID(ST_MakePoint(?, ?), 4326)::geography, ?)
-                """ + (categoryFilter == null ? "" : "  AND category = ?\n");
+                """ + (categoryFilter.isEmpty() ? ""
+                        : "  AND category IN (" + String.join(",", Collections.nCopies(categoryFilter.size(), "?")) + ")\n");
         List<Object> filterArgs = new ArrayList<>(List.of(longitude, latitude, radiusMeters));
-        if (categoryFilter != null) {
-            filterArgs.add(categoryFilter);
-        }
+        filterArgs.addAll(categoryFilter);
         List<Object> pageArgs = new ArrayList<>(List.of(longitude, latitude));
         pageArgs.addAll(filterArgs);
         pageArgs.add(size);

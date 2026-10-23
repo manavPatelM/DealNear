@@ -87,3 +87,35 @@ test('gateway proxies offer requests and preserves authorization', async () => {
       await new Promise((resolve) => service.close(resolve));
     }
 });
+
+test('category routes are served by offer-service', async () => {
+  const seen = [];
+  const service = await new Promise((resolve) => {
+    const server = createServer((request, response) => {
+      seen.push(request.url);
+      response.writeHead(200, { 'content-type': 'application/json' });
+      response.end(JSON.stringify({ categories: [] }));
+    });
+    server.listen(0, () => resolve(server));
+  });
+  const gateway = createApiGatewayServer({
+    services: {
+      offer: `http://127.0.0.1:${service.address().port}`,
+      vendor: 'http://127.0.0.1:1',
+      discovery: 'http://127.0.0.1:1',
+      identity: 'http://127.0.0.1:1',
+    },
+  });
+  await new Promise((resolve) => gateway.listen(0, resolve));
+  const base = `http://127.0.0.1:${gateway.address().port}`;
+
+  try {
+    assert.equal((await fetch(`${base}/api/categories`)).status, 200);
+    assert.equal((await fetch(`${base}/api/categories/admin`)).status, 200);
+    assert.equal((await fetch(`${base}/api/categoriesx`)).status, 404);
+    assert.deepEqual(seen, ['/api/categories', '/api/categories/admin']);
+  } finally {
+    await new Promise((resolve) => gateway.close(resolve));
+    await new Promise((resolve) => service.close(resolve));
+  }
+});

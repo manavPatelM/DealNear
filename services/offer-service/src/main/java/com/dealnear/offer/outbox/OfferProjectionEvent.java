@@ -19,7 +19,7 @@ public record OfferProjectionEvent(
         return new OfferProjectionEvent(
                 offer.getId(), offer.getStoreId(), offer.getTitle(), offer.getDescription(),
                 offer.getStartAt(), offer.getEndAt(), offer.getCreatedAt(), projectionVersion,
-                offer.getCategory().name()
+                offer.getCategory()
         );
     }
 }

@@ -80,6 +80,10 @@ MVP completion (DN-033 to DN-039, verified 2026-10-15):
 - Single-host AWS deployment is defined in `infra/aws` (Terraform validated, not yet
   applied) and documented in `docs/deploy/AWS_DEPLOYMENT.md`.
 
+Website specification, Phase 1 (2026-10-22): routed website (DN-040), admin-managed
+category taxonomy (DN-041), new homepage with location selector (DN-042), and Playwright
+browser tests in CI (DN-043). Full plan: `docs/plan/SPEC_IMPLEMENTATION_PLAN.md`.
+
 ## Working locally
 - [ ] Repository cloned and dependencies installed
 - [x] Documented local checks pass
@@ -105,5 +109,5 @@ MVP completion (DN-033 to DN-039, verified 2026-10-15):
   gateway timeout is 10s in Compose.
 
 ## Next task
-Apply the AWS demo deployment (`docs/deploy/AWS_DEPLOYMENT.md`), then DN-040:
-build/push images to ECR from CI with GitHub OIDC.
+Phase 2 of the website plan: DN-044 media uploads, DN-045 store profiles, DN-046 rich
+offers, DN-047 offer details page, DN-048 vendor offer manager.

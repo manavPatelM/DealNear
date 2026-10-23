@@ -20,7 +20,7 @@ public record OfferResponse(
     public static OfferResponse from(Offer offer) {
         return new OfferResponse(offer.getId(), offer.getVendorId(), offer.getStoreId(),
                 offer.getTitle(), offer.getDescription(), offer.getStatus().name(), offer.getCreatedAt(),
-                offer.getStartAt(), offer.getEndAt(), offer.getCategory().name(),
+                offer.getStartAt(), offer.getEndAt(), offer.getCategory(),
                 offer.isExpired(Instant.now()), offer.getModerationNote());
     }
 }
